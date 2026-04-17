@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ private enum class AppDestination {
     Catalog,
     ByStage,
     Resources,
+    History,
 }
 
 @Composable
@@ -65,6 +67,12 @@ fun AppShell(repo: InventoryRepository) {
                     icon = { Icon(Icons.Default.Science, contentDescription = null) },
                     label = { Text("Insumos") },
                 )
+                NavigationRailItem(
+                    selected = destination == AppDestination.History,
+                    onClick = { destination = AppDestination.History },
+                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                    label = { Text("Historial") },
+                )
             }
             Column(
                 modifier =
@@ -78,6 +86,7 @@ fun AppShell(repo: InventoryRepository) {
                     AppDestination.Catalog -> CatalogScreen(repo)
                     AppDestination.ByStage -> ProductsByStageScreen(repo)
                     AppDestination.Resources -> ResourcesScreen(repo)
+                    AppDestination.History -> HistoryScreen(repo)
                 }
             }
         }

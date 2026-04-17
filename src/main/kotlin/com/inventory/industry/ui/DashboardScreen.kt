@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun DashboardScreen(repo: InventoryRepository) {
     var counts by remember { mutableStateOf<Map<ProductStage, Int>?>(null) }
+    var polesByStage by remember { mutableStateOf<Map<ProductStage, Double>?>(null) }
     var total by remember { mutableStateOf<Double?>(null) }
     var productCount by remember { mutableStateOf<Int?>(null) }
     var failedCount by remember { mutableStateOf<Int?>(null) }
@@ -36,6 +37,7 @@ fun DashboardScreen(repo: InventoryRepository) {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             counts = repo.countByStage()
+            polesByStage = repo.polesByStage()
             total = repo.totalProcessCost()
             productCount = repo.listProducts().size
             failedCount = repo.failedProductCount()
@@ -61,7 +63,9 @@ fun DashboardScreen(repo: InventoryRepository) {
             style = MaterialTheme.typography.bodyMedium,
         )
 
-        if (counts == null || total == null || productCount == null || failedCount == null || failedValue == null || catalogCount == null) {
+        if (counts == null || polesByStage == null || total == null || productCount == null ||
+            failedCount == null || failedValue == null || catalogCount == null
+        ) {
             Text("Cargando…")
             return@Column
         }
@@ -75,17 +79,19 @@ fun DashboardScreen(repo: InventoryRepository) {
         )
         MetricRow("Gasto en insumos de transformación", formatMoney(total!!))
 
-        Text("Por etapa", style = MaterialTheme.typography.titleMedium)
+        Text("Postes por etapa", style = MaterialTheme.typography.titleMedium)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ProductStage.entries.forEach { s ->
+                val poles = polesByStage!![s] ?: 0.0
+                val lots = counts!![s] ?: 0
                 MetricCard(
                     modifier = Modifier.weight(1f),
                     title = s.shortCode,
-                    subtitle = s.title,
-                    value = counts!![s].toString(),
+                    subtitle = "${s.title} · $lots lote(s)",
+                    value = formatQty(poles),
                 )
             }
         }
@@ -122,4 +128,3 @@ private fun MetricCard(
     }
 }
 
-private fun formatMoney(amount: Double): String = "%.2f".format(amount)

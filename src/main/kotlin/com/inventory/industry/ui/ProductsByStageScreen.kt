@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -34,8 +35,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,7 +68,7 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
     var products by remember { mutableStateOf<List<Product>>(emptyList()) }
     var showEditor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Product?>(null) }
-    var advanceTarget by remember { mutableStateOf<Product?>(null) }
+    var transformTrigger by remember { mutableStateOf<TransformTrigger?>(null) }
     var markFailedTarget by remember { mutableStateOf<Product?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -107,8 +110,8 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Los lotes fallados se quedan en la etapa actual, no avanzan y usan el precio de saldo. " +
-                    "Puede quitar la marca si fue un error.",
+                "Use \"Procesar etapa\" para tomar postes de uno o varios lotes y pasarlos a " +
+                    "la siguiente etapa, registrando cuántos salieron bien y cuántos fallaron.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -121,10 +124,28 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                     )
                 }
             }
-            Text(stage.title, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stage.title, style = MaterialTheme.typography.bodyMedium)
+                if (stage.next() != null) {
+                    Button(
+                        onClick = { transformTrigger = TransformTrigger(preselectId = null) },
+                        enabled = products.any { !it.isFailed },
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        Text(
+                            "  Procesar etapa → ${stage.next()!!.shortCode}",
+                        )
+                    }
+                }
+            }
 
             ProductTable(
                 products = products,
+                showAdvance = stage.next() != null,
                 onEdit = {
                     editing = it
                     showEditor = true
@@ -136,7 +157,7 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                     }
                 },
                 onAdvance = {
-                    advanceTarget = it
+                    transformTrigger = TransformTrigger(preselectId = it.id)
                 },
                 onMarkFailed = {
                     markFailedTarget = it
@@ -179,20 +200,18 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
         )
     }
 
-    advanceTarget?.let { product ->
-        if (product.isFailed) {
-            advanceTarget = null
-        } else {
-            AdvanceStageDialog(
-                repo = repo,
-                product = product,
-                onDismiss = { advanceTarget = null },
-                onDone = {
-                    advanceTarget = null
-                    reload()
-                },
-            )
-        }
+    transformTrigger?.let { trigger ->
+        TransformationDialog(
+            repo = repo,
+            fromStage = stage,
+            availableBatches = products.filter { !it.isFailed },
+            preselectId = trigger.preselectId,
+            onDismiss = { transformTrigger = null },
+            onDone = {
+                transformTrigger = null
+                reload()
+            },
+        )
     }
 
     markFailedTarget?.let { product ->
@@ -212,6 +231,8 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
     }
 }
 
+private data class TransformTrigger(val preselectId: Int?)
+
 data class ProductDraft(
     val id: Int?,
     val name: String,
@@ -227,6 +248,7 @@ data class ProductDraft(
 @Composable
 private fun ProductTable(
     products: List<Product>,
+    showAdvance: Boolean,
     onEdit: (Product) -> Unit,
     onDelete: (Product) -> Unit,
     onAdvance: (Product) -> Unit,
@@ -262,9 +284,9 @@ private fun ProductTable(
                 ) {
                     TableCell(p.name, 1.1f)
                     TableCell(p.productLine, 0.75f)
-                    TableCell(p.quantity.toString(), 0.35f)
+                    TableCell(formatQty(p.quantity), 0.35f)
                     TableCell(
-                        p.effectiveSalePrice()?.let { "%.2f".format(it) } ?: "—",
+                        p.effectiveSalePrice()?.let { formatMoney(it) } ?: "—",
                         0.55f,
                     )
                     val statusColor =
@@ -295,9 +317,12 @@ private fun ProductTable(
                                 Icon(Icons.Default.CheckCircle, contentDescription = "Quitar falla")
                             }
                         }
-                        if (p.stage.next() != null && !p.isFailed) {
+                        if (showAdvance && !p.isFailed) {
                             IconButton(onClick = { onAdvance(p) }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Avanzar etapa")
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Procesar este lote",
+                                )
                             }
                         }
                         IconButton(onClick = { onDelete(p) }) {
@@ -533,54 +558,185 @@ private fun MarkFailedDialog(
 }
 
 @Composable
-private fun AdvanceStageDialog(
+private fun TransformationDialog(
     repo: InventoryRepository,
-    product: Product,
+    fromStage: ProductStage,
+    availableBatches: List<Product>,
+    preselectId: Int?,
     onDismiss: () -> Unit,
     onDone: () -> Unit,
 ) {
-    var resources by remember { mutableStateOf<List<Resource>>(emptyList()) }
-    val lines = remember { mutableStateListOf<Triple<Int, String, String>>() }
+    val toStage = fromStage.next() ?: return
 
-    LaunchedEffect(Unit) {
-        val list = withContext(Dispatchers.IO) { repo.listResources() }
-        resources = list
-        if (list.isNotEmpty() && lines.isEmpty()) {
-            lines.add(Triple(list.first().id, "1", ""))
+    val selected = remember { mutableStateMapOf<Int, Boolean>() }
+    val takeQtyText = remember { mutableStateMapOf<Int, String>() }
+
+    LaunchedEffect(preselectId, availableBatches) {
+        if (preselectId != null && availableBatches.any { it.id == preselectId }) {
+            selected[preselectId] = true
+            val b = availableBatches.first { it.id == preselectId }
+            takeQtyText[preselectId] = formatQty(b.quantity)
         }
     }
 
+    val totalInput by remember(availableBatches) {
+        derivedStateOf {
+            availableBatches.sumOf { b ->
+                if (selected[b.id] == true) {
+                    takeQtyText[b.id]?.toDoubleOrNull() ?: 0.0
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
+    var successText by remember { mutableStateOf("") }
+    var failedText by remember { mutableStateOf("0") }
+    var whenText by remember { mutableStateOf(formatEpochMs(System.currentTimeMillis())) }
+    var durationText by remember { mutableStateOf("60") }
+    var notes by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(totalInput) {
+        if (successText.isBlank() || successText.toDoubleOrNull() == null) {
+            successText = formatQty(totalInput)
+        }
+    }
+
+    var resources by remember { mutableStateOf<List<Resource>>(emptyList()) }
+    val resourceLines = remember { mutableStateListOf<Triple<Int, String, String>>() }
+    LaunchedEffect(Unit) {
+        resources = withContext(Dispatchers.IO) { repo.listResources() }
+    }
+
     val scope = rememberCoroutineScope()
-    var error by remember { mutableStateOf<String?>(null) }
+    val successValue = successText.toDoubleOrNull()
+    val failedValue = failedText.toDoubleOrNull()
+    val distributedOk =
+        successValue != null && failedValue != null &&
+            kotlin.math.abs((successValue + failedValue) - totalInput) < 1e-6
+    val whenValid = parseDateTime(whenText) != null
+    val canSubmit =
+        availableBatches.any { selected[it.id] == true } &&
+            totalInput > 0.0 &&
+            distributedOk &&
+            whenValid
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Avanzar ${product.name}") },
+        title = {
+            Text(
+                "Procesar ${fromStage.shortCode} → ${toStage.shortCode}",
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "De ${product.stage.title} a ${product.stage.next()?.title}. " +
-                        "Registre los insumos consumidos; costo de línea = cantidad × costo unitario.",
+                    "Marque los lotes de origen y cuántos postes tomar de cada uno. " +
+                        "Indique luego cuántos salieron bien y cuántos fallaron.",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                lines.forEachIndexed { index, triple ->
+
+                if (availableBatches.isEmpty()) {
+                    Text(
+                        "No hay lotes disponibles en ${fromStage.shortCode}.",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text("Lotes origen", style = MaterialTheme.typography.labelLarge)
+                    availableBatches.forEach { b ->
+                        BatchRow(
+                            batch = b,
+                            checked = selected[b.id] == true,
+                            takeText = takeQtyText[b.id] ?: "",
+                            onCheckedChange = { on ->
+                                selected[b.id] = on
+                                if (on && takeQtyText[b.id].isNullOrBlank()) {
+                                    takeQtyText[b.id] = formatQty(b.quantity)
+                                }
+                            },
+                            onQtyChange = { takeQtyText[b.id] = it },
+                        )
+                    }
+                    Text(
+                        "Total tomado: ${formatQty(totalInput)} postes",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                HorizontalDivider()
+
+                Text("Resultado", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextField(
+                        value = successText,
+                        onValueChange = { successText = it },
+                        label = { Text("Exitosos") },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextField(
+                        value = failedText,
+                        onValueChange = { failedText = it },
+                        label = { Text("Fallados") },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (successValue != null && failedValue != null && !distributedOk) {
+                    Text(
+                        "Exitosos + fallados (${formatQty(successValue + failedValue)}) " +
+                            "debe ser igual al total tomado (${formatQty(totalInput)}).",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
+                HorizontalDivider()
+
+                Text("Procesamiento", style = MaterialTheme.typography.labelLarge)
+                TextField(
+                    value = whenText,
+                    onValueChange = { whenText = it },
+                    label = { Text("Fecha / hora (yyyy-MM-dd HH:mm)") },
+                    isError = !whenValid,
+                )
+                TextField(
+                    value = durationText,
+                    onValueChange = { durationText = it },
+                    label = { Text("Duración total (minutos)") },
+                )
+
+                HorizontalDivider()
+
+                Text("Insumos consumidos", style = MaterialTheme.typography.labelLarge)
+                if (resources.isEmpty()) {
+                    Text(
+                        "Cree insumos en la sección Insumos para poder registrar el consumo.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                resourceLines.forEachIndexed { idx, triple ->
                     val (resId, amount, label) = triple
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DropdownBox(resources, resId) { sel ->
-                                lines[index] = Triple(sel, amount, label)
-                            }
+                            ResourcePicker(
+                                resources = resources,
+                                selectedId = resId,
+                                onSelect = { sel -> resourceLines[idx] = Triple(sel, amount, label) },
+                                modifier = Modifier.weight(1.1f),
+                            )
                             TextField(
                                 value = amount,
-                                onValueChange = { lines[index] = Triple(resId, it, label) },
+                                onValueChange = { resourceLines[idx] = Triple(resId, it, label) },
                                 label = { Text("Cantidad") },
                                 modifier = Modifier.weight(1f),
                             )
                         }
                         TextField(
                             value = label,
-                            onValueChange = { lines[index] = Triple(resId, amount, it) },
-                            label = { Text("Nota (opcional)") },
+                            onValueChange = { resourceLines[idx] = Triple(resId, amount, it) },
+                            label = { Text("Nota de línea (opcional)") },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -588,43 +744,66 @@ private fun AdvanceStageDialog(
                 OutlinedButton(
                     onClick = {
                         val first = resources.firstOrNull()?.id ?: return@OutlinedButton
-                        lines.add(Triple(first, "1", ""))
+                        resourceLines.add(Triple(first, "1", ""))
                     },
                     enabled = resources.isNotEmpty(),
                 ) {
-                    Text("Agregar línea de insumo")
+                    Text("Agregar insumo")
                 }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+                TextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notas generales de la transformación") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                errorMsg?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
             Button(
+                enabled = canSubmit,
                 onClick = {
+                    val processedAt = parseDateTime(whenText) ?: System.currentTimeMillis()
+                    val duration = durationText.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                    val inputs =
+                        availableBatches.mapNotNull { b ->
+                            if (selected[b.id] != true) return@mapNotNull null
+                            val q = takeQtyText[b.id]?.toDoubleOrNull() ?: return@mapNotNull null
+                            if (q <= 0) null
+                            else InventoryRepository.SourceDraft(b.id, q)
+                        }
                     val uses =
-                        lines.mapNotNull { (rid, amt, lbl) ->
-                            val amount = amt.toDoubleOrNull()
-                            if (amount == null || amount <= 0) null
-                            else InventoryRepository.ResourceUse(rid, amount, lbl.trim())
+                        resourceLines.mapNotNull { (rid, amt, lbl) ->
+                            val a = amt.toDoubleOrNull()
+                            if (a == null || a <= 0) null
+                            else InventoryRepository.ResourceUse(rid, a, lbl.trim())
                         }
                     scope.launch {
-                        val ok =
+                        val result =
                             withContext(Dispatchers.IO) {
-                                if (uses.isEmpty()) {
-                                    repo.advanceWithCosts(product.id, emptyList())
-                                } else {
-                                    repo.advanceWithCosts(product.id, uses)
-                                }
+                                repo.createTransformation(
+                                    fromStage = fromStage,
+                                    inputs = inputs,
+                                    successCount = successValue ?: 0.0,
+                                    failedCount = failedValue ?: 0.0,
+                                    durationMinutes = duration,
+                                    processedAtEpochMs = processedAt,
+                                    notes = notes.trim().ifBlank { null },
+                                    resourceUses = uses,
+                                )
                             }
-                        if (!ok) {
-                            error =
-                                "No se pudo avanzar — verifique insumos o si el lote está marcado como fallado."
-                        } else {
-                            onDone()
+                        when (result) {
+                            is InventoryRepository.TransformationResult.Ok -> onDone()
+                            is InventoryRepository.TransformationResult.Err -> errorMsg = result.message
                         }
                     }
                 },
             ) {
-                Text("Avanzar")
+                Text("Registrar transformación")
             }
         },
         dismissButton = {
@@ -634,19 +813,53 @@ private fun AdvanceStageDialog(
 }
 
 @Composable
-private fun RowScope.DropdownBox(
+private fun BatchRow(
+    batch: Product,
+    checked: Boolean,
+    takeText: String,
+    onCheckedChange: (Boolean) -> Unit,
+    onQtyChange: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Column(modifier = Modifier.weight(1.4f)) {
+            Text(batch.name, fontWeight = FontWeight.Medium)
+            Text(
+                "${batch.productLine} · disponible ${formatQty(batch.quantity)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextField(
+            value = takeText,
+            onValueChange = onQtyChange,
+            label = { Text("Tomar") },
+            enabled = checked,
+            modifier = Modifier.weight(0.8f),
+        )
+    }
+}
+
+@Composable
+private fun ResourcePicker(
     resources: List<Resource>,
     selectedId: Int,
     onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val current = resources.firstOrNull { it.id == selectedId } ?: resources.firstOrNull()
     OutlinedButton(
         onClick = {
+            if (resources.isEmpty()) return@OutlinedButton
             val idx = resources.indexOfFirst { it.id == selectedId }.let { if (it < 0) 0 else it }
-            val next = (idx + 1) % resources.size.coerceAtLeast(1)
-            if (resources.isNotEmpty()) onSelect(resources[next].id)
+            val next = resources[(idx + 1) % resources.size]
+            onSelect(next.id)
         },
-        modifier = Modifier.weight(1.2f),
+        modifier = modifier,
     ) {
         Text(current?.let { "${it.name} (${it.unit})" } ?: "Cree insumos primero")
     }

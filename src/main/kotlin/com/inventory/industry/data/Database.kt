@@ -20,6 +20,8 @@ object IndustryDatabase {
                 CatalogProductsTable,
                 ProductsTable,
                 ResourcesTable,
+                TransformationsTable,
+                TransformationInputsTable,
                 ProcessCostsTable,
             )
         }

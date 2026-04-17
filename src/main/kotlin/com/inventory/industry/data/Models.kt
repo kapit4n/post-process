@@ -47,6 +47,7 @@ data class Resource(
 data class ProcessCostLine(
     val id: Int,
     val productId: Int,
+    val transformationId: Int?,
     val fromStage: ProductStage,
     val toStage: ProductStage,
     val resourceId: Int?,
@@ -55,4 +56,30 @@ data class ProcessCostLine(
     val lineCost: Double,
     val label: String,
     val createdAtEpochMs: Long,
+)
+
+/** Resumen de una transformación con sus lotes fuente y costo total. */
+data class Transformation(
+    val id: Int,
+    val fromStage: ProductStage,
+    val toStage: ProductStage,
+    val processedAtEpochMs: Long,
+    val durationMinutes: Int,
+    val successCount: Double,
+    val failedCount: Double,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+    val inputs: List<TransformationInputView>,
+    val totalCost: Double,
+) {
+    val totalInput: Double get() = successCount + failedCount
+}
+
+/** Lote fuente usado en una transformación (snapshot). */
+data class TransformationInputView(
+    val id: Int,
+    val sourceProductId: Int?,
+    val sourceName: String,
+    val sourceLine: String,
+    val quantity: Double,
 )

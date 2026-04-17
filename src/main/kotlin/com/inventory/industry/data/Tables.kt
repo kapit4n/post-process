@@ -13,6 +13,26 @@ object CatalogProductsTable : Table("catalog_products") {
     override val primaryKey = PrimaryKey(id)
 }
 
+/** Proveedores de troncos / materia prima (se asigna al ingresar en Crudo). */
+object PoleProvidersTable : Table("pole_providers") {
+    val id = integer("id").autoIncrement()
+    val name = varchar("name", 255)
+    val contact = varchar("contact", 512).nullable()
+    val notes = text("notes").nullable()
+    val createdAtEpochMs = long("created_at_ms")
+    override val primaryKey = PrimaryKey(id)
+}
+
+/** Clientes que compran postes terminados o en saldo (fallados). */
+object ClientsTable : Table("clients") {
+    val id = integer("id").autoIncrement()
+    val name = varchar("name", 255)
+    val contact = varchar("contact", 512).nullable()
+    val notes = text("notes").nullable()
+    val createdAtEpochMs = long("created_at_ms")
+    override val primaryKey = PrimaryKey(id)
+}
+
 /** Lotes de postes vivos en el inventario — cada fila es un lote en una etapa. */
 object ProductsTable : Table("products") {
     val id = integer("id").autoIncrement()
@@ -25,6 +45,10 @@ object ProductsTable : Table("products") {
     val catalogProductId =
         integer("catalog_product_id")
             .references(CatalogProductsTable.id, onDelete = ReferenceOption.SET_NULL)
+            .nullable()
+    val providerId =
+        integer("provider_id")
+            .references(PoleProvidersTable.id, onDelete = ReferenceOption.SET_NULL)
             .nullable()
     val isFailed = bool("is_failed").default(false)
     /** Etapa donde se detectó la falla. */
@@ -40,6 +64,21 @@ object ResourcesTable : Table("resources") {
     val name = varchar("name", 255)
     val unit = varchar("unit", 64)
     val costPerUnit = double("cost_per_unit")
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Receta por etapa de origen: cantidad de insumo por poste procesado al avanzar desde [fromStage].
+ * Ej.: en CRUDO → DESCORTEZADO, litros de agua por poste.
+ */
+object StageResourceTemplatesTable : Table("stage_resource_templates") {
+    val id = integer("id").autoIncrement()
+    val fromStage = varchar("from_stage", 32)
+    val resourceId =
+        integer("resource_id").references(ResourcesTable.id, onDelete = ReferenceOption.CASCADE)
+    val amountPerPole = double("amount_per_pole")
+    val notes = text("notes").nullable()
+    val displayOrder = integer("display_order").default(0)
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -96,5 +135,30 @@ object ProcessCostsTable : Table("process_costs") {
     val lineCost = double("line_cost")
     val label = varchar("label", 255).default("")
     val createdAtEpochMs = long("created_at_ms")
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Venta registrada (postes terminados OK o lotes fallados a precio de saldo).
+ * Incluye snapshots para contabilidad aunque el lote se elimine del inventario.
+ */
+object SalesTable : Table("sales") {
+    val id = integer("id").autoIncrement()
+    val productId =
+        integer("product_id")
+            .references(ProductsTable.id, onDelete = ReferenceOption.SET_NULL)
+            .nullable()
+    val clientId =
+        integer("client_id").references(ClientsTable.id, onDelete = ReferenceOption.RESTRICT)
+    val quantitySold = double("quantity_sold")
+    val totalAmount = double("total_amount")
+    val unitPrice = double("unit_price").nullable()
+    val soldAtEpochMs = long("sold_at_ms")
+    val notes = text("notes").nullable()
+    val snapshotProductName = varchar("snapshot_product_name", 255)
+    val snapshotProductLine = varchar("snapshot_product_line", 255)
+    val snapshotStage = varchar("snapshot_stage", 32)
+    val snapshotWasFailed = bool("snapshot_was_failed")
+    val snapshotProviderName = varchar("snapshot_provider_name", 255).nullable()
     override val primaryKey = PrimaryKey(id)
 }

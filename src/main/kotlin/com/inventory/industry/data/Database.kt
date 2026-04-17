@@ -18,12 +18,18 @@ object IndustryDatabase {
         transaction {
             SchemaUtils.createMissingTablesAndColumns(
                 CatalogProductsTable,
+                PoleProvidersTable,
+                ClientsTable,
                 ProductsTable,
                 ResourcesTable,
+                StageResourceTemplatesTable,
                 TransformationsTable,
                 TransformationInputsTable,
                 ProcessCostsTable,
+                SalesTable,
             )
         }
+        seedDefaultResourcesIfEmpty()
+        seedDefaultStageTemplatesIfEmpty()
     }
 }

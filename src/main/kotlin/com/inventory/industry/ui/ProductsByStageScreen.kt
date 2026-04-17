@@ -50,8 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.CatalogProduct
 import com.inventory.industry.data.InventoryRepository
+import com.inventory.industry.data.PoleProvider
 import com.inventory.industry.data.Product
 import com.inventory.industry.data.Resource
+import com.inventory.industry.data.StageResourceTemplate
 import com.inventory.industry.domain.ProductStage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -189,6 +191,7 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                             quantity = draft.quantity,
                             notes = draft.notes,
                             catalogProductId = draft.catalogProductId,
+                            providerId = draft.providerId,
                             standardSalePrice = draft.standardSalePrice,
                             failedSalePrice = draft.failedSalePrice,
                         )
@@ -241,6 +244,7 @@ data class ProductDraft(
     val quantity: Double,
     val notes: String?,
     val catalogProductId: Int?,
+    val providerId: Int?,
     val standardSalePrice: Double?,
     val failedSalePrice: Double?,
 )
@@ -263,13 +267,14 @@ private fun ProductTable(
                     .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TableHeaderCell("Nombre", 1.1f)
-            TableHeaderCell("Línea", 0.75f)
-            TableHeaderCell("Cant.", 0.35f)
-            TableHeaderCell("Precio", 0.55f)
-            TableHeaderCell("Estado", 0.65f)
-            TableHeaderCell("Notas", 0.9f)
-            TableHeaderCell("Acc.", 0.95f)
+            TableHeaderCell("Nombre", 0.95f)
+            TableHeaderCell("Línea", 0.6f)
+            TableHeaderCell("Prov.", 0.55f)
+            TableHeaderCell("Cant.", 0.32f)
+            TableHeaderCell("Precio", 0.48f)
+            TableHeaderCell("Estado", 0.58f)
+            TableHeaderCell("Notas", 0.75f)
+            TableHeaderCell("Acc.", 0.9f)
         }
         HorizontalDivider()
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -282,25 +287,31 @@ private fun ProductTable(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    TableCell(p.name, 1.1f)
-                    TableCell(p.productLine, 0.75f)
-                    TableCell(formatQty(p.quantity), 0.35f)
+                    TableCell(p.name, 0.95f)
+                    TableCell(p.productLine, 0.6f)
+                    Text(
+                        p.providerName ?: "—",
+                        modifier = Modifier.weight(0.55f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                    )
+                    TableCell(formatQty(p.quantity), 0.32f)
                     TableCell(
                         p.effectiveSalePrice()?.let { formatMoney(it) } ?: "—",
-                        0.55f,
+                        0.48f,
                     )
                     val statusColor =
                         if (p.isFailed) MaterialTheme.colorScheme.error else Color.Unspecified
                     Text(
                         p.statusLabel(),
-                        modifier = Modifier.weight(0.65f),
+                        modifier = Modifier.weight(0.58f),
                         style = MaterialTheme.typography.bodySmall,
                         color = statusColor,
                         fontWeight = if (p.isFailed) FontWeight.SemiBold else FontWeight.Normal,
                     )
-                    TableCell(p.notes.orEmpty(), 0.9f)
+                    TableCell(p.notes.orEmpty(), 0.75f)
                     Row(
-                        modifier = Modifier.weight(0.95f),
+                        modifier = Modifier.weight(0.9f),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -366,7 +377,9 @@ private fun ProductEditorDialog(
     onSave: (ProductDraft) -> Unit,
 ) {
     var catalog by remember { mutableStateOf<List<CatalogProduct>>(emptyList()) }
+    var providers by remember { mutableStateOf<List<PoleProvider>>(emptyList()) }
     var catalogProductId by remember { mutableStateOf(initial?.catalogProductId) }
+    var providerId by remember { mutableStateOf(initial?.providerId) }
     var name by remember { mutableStateOf(initial?.name.orEmpty()) }
     var line by remember { mutableStateOf(initial?.productLine.orEmpty()) }
     var stage by remember { mutableStateOf(initial?.stage ?: defaultStage) }
@@ -377,6 +390,7 @@ private fun ProductEditorDialog(
 
     LaunchedEffect(Unit) {
         catalog = withContext(Dispatchers.IO) { repo.listCatalogProducts() }
+        providers = withContext(Dispatchers.IO) { repo.listPoleProviders() }
     }
 
     AlertDialog(
@@ -409,6 +423,41 @@ private fun ProductEditorDialog(
                 }
                 TextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") })
                 TextField(value = line, onValueChange = { line = it }, label = { Text("Línea de producto") })
+                if (providers.isNotEmpty()) {
+                    Text(
+                        if (stage == ProductStage.CRUDO) {
+                            "Proveedor (típico en etapa Crudo)"
+                        } else {
+                            "Proveedor de origen (opcional)"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val currentProv = providers.firstOrNull { it.id == providerId }
+                        OutlinedButton(
+                            onClick = {
+                                if (providers.isEmpty()) return@OutlinedButton
+                                val idx =
+                                    providers.indexOfFirst { it.id == providerId }.let {
+                                        if (it < 0) 0 else it
+                                    }
+                                providerId = providers[(idx + 1) % providers.size].id
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(currentProv?.name ?: "Elegir proveedor…")
+                        }
+                        TextButton(onClick = { providerId = null }) {
+                            Text("Quitar")
+                        }
+                    }
+                } else {
+                    Text(
+                        "Sin proveedores registrados. Créelos en «Proveedores» para asignar el ingreso.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text("Etapa", style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ProductStage.entries.forEach { s ->
@@ -449,6 +498,7 @@ private fun ProductEditorDialog(
                             quantity = q,
                             notes = notes.ifBlank { null },
                             catalogProductId = catalogProductId,
+                            providerId = providerId,
                             standardSalePrice = standardPrice.toDoubleOrNull(),
                             failedSalePrice = failedPrice.toDoubleOrNull(),
                         ),
@@ -605,9 +655,13 @@ private fun TransformationDialog(
     }
 
     var resources by remember { mutableStateOf<List<Resource>>(emptyList()) }
+    var stageTemplates by remember { mutableStateOf<List<StageResourceTemplate>>(emptyList()) }
     val resourceLines = remember { mutableStateListOf<Triple<Int, String, String>>() }
     LaunchedEffect(Unit) {
         resources = withContext(Dispatchers.IO) { repo.listResources() }
+    }
+    LaunchedEffect(fromStage) {
+        stageTemplates = withContext(Dispatchers.IO) { repo.listStageResourceTemplates(fromStage) }
     }
 
     val scope = rememberCoroutineScope()
@@ -710,6 +764,47 @@ private fun TransformationDialog(
                 HorizontalDivider()
 
                 Text("Insumos consumidos", style = MaterialTheme.typography.labelLarge)
+                if (stageTemplates.isNotEmpty()) {
+                    Text(
+                        "${stageTemplates.size} líneas en la receta de ${fromStage.shortCode}. " +
+                            "Aplique para multiplicar por el total de postes; luego puede ajustar cantidades.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                resourceLines.clear()
+                                val uses =
+                                    repo.suggestResourceUsesFromRecipe(fromStage, totalInput)
+                                uses.forEach { u ->
+                                    resourceLines.add(
+                                        Triple(
+                                            u.resourceId,
+                                            formatQty(u.amount),
+                                            u.label,
+                                        ),
+                                    )
+                                }
+                            },
+                            enabled = totalInput > 0 && resources.isNotEmpty(),
+                        ) {
+                            Text("Aplicar receta (${formatQty(totalInput)} postes)")
+                        }
+                        OutlinedButton(
+                            onClick = { resourceLines.clear() },
+                            enabled = resourceLines.isNotEmpty(),
+                        ) {
+                            Text("Vaciar")
+                        }
+                    }
+                } else {
+                    Text(
+                        "Sin receta para ${fromStage.shortCode}. Configúrela en «Recetas» o agregue insumos a mano.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (resources.isEmpty()) {
                     Text(
                         "Cree insumos en la sección Insumos para poder registrar el consumo.",
@@ -718,6 +813,8 @@ private fun TransformationDialog(
                 }
                 resourceLines.forEachIndexed { idx, triple ->
                     val (resId, amount, label) = triple
+                    val resMeta = resources.firstOrNull { it.id == resId }
+                    val tpl = stageTemplates.firstOrNull { it.resourceId == resId }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             ResourcePicker(
@@ -729,7 +826,7 @@ private fun TransformationDialog(
                             TextField(
                                 value = amount,
                                 onValueChange = { resourceLines[idx] = Triple(resId, it, label) },
-                                label = { Text("Cantidad") },
+                                label = { Text("Cantidad usada") },
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -739,6 +836,14 @@ private fun TransformationDialog(
                             label = { Text("Nota de línea (opcional)") },
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        if (tpl != null && resMeta != null && totalInput > 0) {
+                            Text(
+                                "Receta: ${formatQty(tpl.amountPerPole)} ${resMeta.unit}/poste × " +
+                                    "${formatQty(totalInput)} = ${formatQty(tpl.amountPerPole * totalInput)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 OutlinedButton(

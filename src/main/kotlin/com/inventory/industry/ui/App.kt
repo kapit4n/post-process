@@ -6,11 +6,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -31,6 +36,11 @@ private enum class AppDestination {
     Catalog,
     ByStage,
     Resources,
+    Recipes,
+    Providers,
+    Clients,
+    Sales,
+    Accounting,
     History,
 }
 
@@ -68,6 +78,36 @@ fun AppShell(repo: InventoryRepository) {
                     label = { Text("Insumos") },
                 )
                 NavigationRailItem(
+                    selected = destination == AppDestination.Recipes,
+                    onClick = { destination = AppDestination.Recipes },
+                    icon = { Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null) },
+                    label = { Text("Recetas") },
+                )
+                NavigationRailItem(
+                    selected = destination == AppDestination.Providers,
+                    onClick = { destination = AppDestination.Providers },
+                    icon = { Icon(Icons.Default.LocalShipping, contentDescription = null) },
+                    label = { Text("Proveedores") },
+                )
+                NavigationRailItem(
+                    selected = destination == AppDestination.Clients,
+                    onClick = { destination = AppDestination.Clients },
+                    icon = { Icon(Icons.Default.People, contentDescription = null) },
+                    label = { Text("Clientes") },
+                )
+                NavigationRailItem(
+                    selected = destination == AppDestination.Sales,
+                    onClick = { destination = AppDestination.Sales },
+                    icon = { Icon(Icons.Default.ShoppingCart, contentDescription = null) },
+                    label = { Text("Ventas") },
+                )
+                NavigationRailItem(
+                    selected = destination == AppDestination.Accounting,
+                    onClick = { destination = AppDestination.Accounting },
+                    icon = { Icon(Icons.Default.AccountBalance, contentDescription = null) },
+                    label = { Text("Contabilidad") },
+                )
+                NavigationRailItem(
                     selected = destination == AppDestination.History,
                     onClick = { destination = AppDestination.History },
                     icon = { Icon(Icons.Default.History, contentDescription = null) },
@@ -78,6 +118,7 @@ fun AppShell(repo: InventoryRepository) {
                 modifier =
                     Modifier
                         .weight(1f)
+                        .fillMaxSize()
                         .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -86,6 +127,11 @@ fun AppShell(repo: InventoryRepository) {
                     AppDestination.Catalog -> CatalogScreen(repo)
                     AppDestination.ByStage -> ProductsByStageScreen(repo)
                     AppDestination.Resources -> ResourcesScreen(repo)
+                    AppDestination.Recipes -> StageRecipesScreen(repo)
+                    AppDestination.Providers -> ProvidersScreen(repo)
+                    AppDestination.Clients -> ClientsScreen(repo)
+                    AppDestination.Sales -> SalesScreen(repo)
+                    AppDestination.Accounting -> AccountingScreen(repo)
                     AppDestination.History -> HistoryScreen(repo)
                 }
             }

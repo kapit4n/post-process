@@ -1,12 +1,22 @@
 package com.inventory.industry.data
 
 import com.inventory.industry.domain.ProductStage
+import java.time.Instant
+import java.time.LocalDate
+import java.time.Year
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.leftJoin
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.sum
 import org.jetbrains.exposed.sql.update
@@ -65,7 +75,7 @@ class InventoryRepository {
 
     fun listProducts(): List<Product> =
         transaction {
-            ProductsTable
+            (ProductsTable leftJoin PoleProvidersTable)
                 .selectAll()
                 .orderBy(ProductsTable.name to SortOrder.ASC)
                 .map { it.toProduct() }
@@ -73,7 +83,7 @@ class InventoryRepository {
 
     fun listProducts(stage: ProductStage): List<Product> =
         transaction {
-            ProductsTable
+            (ProductsTable leftJoin PoleProvidersTable)
                 .selectAll()
                 .where { ProductsTable.stage eq stage.name }
                 .orderBy(ProductsTable.name to SortOrder.ASC)
@@ -82,12 +92,325 @@ class InventoryRepository {
 
     fun getProduct(id: Int): Product? =
         transaction {
-            ProductsTable
+            (ProductsTable leftJoin PoleProvidersTable)
                 .selectAll()
                 .where { ProductsTable.id eq id }
                 .singleOrNull()
                 ?.toProduct()
         }
+
+    /** Lotes que se pueden vender: terminados OK o cualquier lote fallado con stock. */
+    fun listSellableProducts(): List<Product> =
+        listProducts().filter { it.isSellable() && it.quantity > 1e-6 }
+
+    fun inventoryFlowSummary(): InventoryFlowSummary {
+        val products = listProducts()
+        val perStage =
+            ProductStage.entries.map { st ->
+                val list = products.filter { it.stage == st }
+                StageInventoryRow(
+                    stage = st,
+                    totalPoles = list.sumOf { it.quantity },
+                    lotCount = list.size,
+                    okPoles = list.filter { !it.isFailed }.sumOf { it.quantity },
+                    failedPoles = list.filter { it.isFailed }.sumOf { it.quantity },
+                )
+            }
+        val inProcess =
+            listOf(ProductStage.CRUDO, ProductStage.DESCORTEZADO, ProductStage.TRATADO).sumOf { st ->
+                products.filter { it.stage == st && !it.isFailed }.sumOf { it.quantity }
+            }
+        val finished =
+            products
+                .filter { it.stage == ProductStage.TERMINADO && !it.isFailed }
+                .sumOf { it.quantity }
+        val salvage = products.filter { it.isFailed }.sumOf { it.quantity }
+        return InventoryFlowSummary(perStage, inProcess, finished, salvage)
+    }
+
+    fun listPoleProviders(): List<PoleProvider> =
+        transaction {
+            PoleProvidersTable
+                .selectAll()
+                .orderBy(PoleProvidersTable.name to SortOrder.ASC)
+                .map {
+                    PoleProvider(
+                        id = it[PoleProvidersTable.id],
+                        name = it[PoleProvidersTable.name],
+                        contact = it[PoleProvidersTable.contact],
+                        notes = it[PoleProvidersTable.notes],
+                        createdAtEpochMs = it[PoleProvidersTable.createdAtEpochMs],
+                    )
+                }
+        }
+
+    fun upsertPoleProvider(
+        id: Int?,
+        name: String,
+        contact: String?,
+        notes: String?,
+    ): Int =
+        transaction {
+            val now = System.currentTimeMillis()
+            if (id == null) {
+                PoleProvidersTable.insert {
+                    it[PoleProvidersTable.name] = name
+                    it[PoleProvidersTable.contact] = contact
+                    it[PoleProvidersTable.notes] = notes
+                    it[PoleProvidersTable.createdAtEpochMs] = now
+                }[PoleProvidersTable.id]
+            } else {
+                PoleProvidersTable.update({ PoleProvidersTable.id eq id }) {
+                    it[PoleProvidersTable.name] = name
+                    it[PoleProvidersTable.contact] = contact
+                    it[PoleProvidersTable.notes] = notes
+                }
+                id
+            }
+        }
+
+    fun deletePoleProvider(id: Int) {
+        transaction {
+            ProductsTable.update({ ProductsTable.providerId eq id }) {
+                it[ProductsTable.providerId] = null
+            }
+            PoleProvidersTable.deleteWhere { PoleProvidersTable.id eq id }
+        }
+    }
+
+    fun listClients(): List<Client> =
+        transaction {
+            ClientsTable
+                .selectAll()
+                .orderBy(ClientsTable.name to SortOrder.ASC)
+                .map {
+                    Client(
+                        id = it[ClientsTable.id],
+                        name = it[ClientsTable.name],
+                        contact = it[ClientsTable.contact],
+                        notes = it[ClientsTable.notes],
+                        createdAtEpochMs = it[ClientsTable.createdAtEpochMs],
+                    )
+                }
+        }
+
+    fun upsertClient(
+        id: Int?,
+        name: String,
+        contact: String?,
+        notes: String?,
+    ): Int =
+        transaction {
+            val now = System.currentTimeMillis()
+            if (id == null) {
+                ClientsTable.insert {
+                    it[ClientsTable.name] = name
+                    it[ClientsTable.contact] = contact
+                    it[ClientsTable.notes] = notes
+                    it[ClientsTable.createdAtEpochMs] = now
+                }[ClientsTable.id]
+            } else {
+                ClientsTable.update({ ClientsTable.id eq id }) {
+                    it[ClientsTable.name] = name
+                    it[ClientsTable.contact] = contact
+                    it[ClientsTable.notes] = notes
+                }
+                id
+            }
+        }
+
+    /** Devuelve false si el cliente tiene ventas registradas. */
+    fun deleteClient(id: Int): Boolean =
+        transaction {
+            val n =
+                SalesTable
+                    .selectAll()
+                    .where { SalesTable.clientId eq id }
+                    .count()
+            if (n > 0L) return@transaction false
+            ClientsTable.deleteWhere { ClientsTable.id eq id }
+            true
+        }
+
+    fun listSales(limit: Int = 500): List<SaleRecord> =
+        transaction {
+            (SalesTable innerJoin ClientsTable)
+                .selectAll()
+                .orderBy(SalesTable.soldAtEpochMs to SortOrder.DESC)
+                .limit(limit)
+                .map { it.toSaleRecord() }
+        }
+
+    fun loadAllSales(): List<SaleRecord> =
+        transaction {
+            (SalesTable innerJoin ClientsTable)
+                .selectAll()
+                .orderBy(SalesTable.soldAtEpochMs to SortOrder.DESC)
+                .map { it.toSaleRecord() }
+        }
+
+    sealed class SaleRecordingResult {
+        data class Ok(val saleId: Int) : SaleRecordingResult()
+
+        data class Err(val message: String) : SaleRecordingResult()
+    }
+
+    fun recordSale(
+        productId: Int,
+        clientId: Int,
+        quantitySold: Double,
+        totalAmount: Double,
+        soldAtEpochMs: Long,
+        notes: String?,
+    ): SaleRecordingResult =
+        transaction {
+            ClientsTable
+                .selectAll()
+                .where { ClientsTable.id eq clientId }
+                .singleOrNull()
+                ?: return@transaction SaleRecordingResult.Err("Cliente no encontrado.")
+
+            val prow =
+                ProductsTable
+                    .selectAll()
+                    .where { ProductsTable.id eq productId }
+                    .singleOrNull()
+                    ?: return@transaction SaleRecordingResult.Err("Lote no encontrado.")
+
+            val stage = ProductStage.fromDb(prow[ProductsTable.stage])
+            val isFailed = prow[ProductsTable.isFailed]
+            val sellable = (stage == ProductStage.TERMINADO && !isFailed) || isFailed
+            if (!sellable) {
+                return@transaction SaleRecordingResult.Err(
+                    "Sólo se venden postes en Terminado (OK) o lotes marcados como fallados.",
+                )
+            }
+            val qtyAvail = prow[ProductsTable.quantity]
+            if (quantitySold <= 0 || quantitySold - qtyAvail > 1e-6) {
+                return@transaction SaleRecordingResult.Err(
+                    "Cantidad inválida (disponible: ${fmt(qtyAvail)}).",
+                )
+            }
+            if (totalAmount < 0) {
+                return@transaction SaleRecordingResult.Err("El monto total no puede ser negativo.")
+            }
+
+            val provId = prow[ProductsTable.providerId]
+            val provName =
+                if (provId != null) {
+                    PoleProvidersTable
+                        .selectAll()
+                        .where { PoleProvidersTable.id eq provId }
+                        .singleOrNull()
+                        ?.get(PoleProvidersTable.name)
+                } else {
+                    null
+                }
+
+            val unitPrice = if (quantitySold > 0) totalAmount / quantitySold else null
+
+            val saleId =
+                SalesTable.insert {
+                    it[SalesTable.productId] = productId
+                    it[SalesTable.clientId] = clientId
+                    it[SalesTable.quantitySold] = quantitySold
+                    it[SalesTable.totalAmount] = totalAmount
+                    it[SalesTable.unitPrice] = unitPrice
+                    it[SalesTable.soldAtEpochMs] = soldAtEpochMs
+                    it[SalesTable.notes] = notes
+                    it[SalesTable.snapshotProductName] = prow[ProductsTable.name]
+                    it[SalesTable.snapshotProductLine] = prow[ProductsTable.productLine]
+                    it[SalesTable.snapshotStage] = stage.name
+                    it[SalesTable.snapshotWasFailed] = isFailed
+                    it[SalesTable.snapshotProviderName] = provName
+                }[SalesTable.id]
+
+            val remaining = qtyAvail - quantitySold
+            if (remaining <= 1e-6) {
+                ProcessCostsTable.deleteWhere { ProcessCostsTable.productId eq productId }
+                ProductsTable.deleteWhere { ProductsTable.id eq productId }
+            } else {
+                ProductsTable.update({ ProductsTable.id eq productId }) {
+                    it[ProductsTable.quantity] = remaining
+                }
+            }
+
+            SaleRecordingResult.Ok(saleId)
+        }
+
+    fun salesAggregatedDaily(
+        year: Int,
+        month: Int,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<AccountingBucket> {
+        val sales =
+            loadAllSales().filter {
+                val d = Instant.ofEpochMilli(it.soldAtEpochMs).atZone(zone).toLocalDate()
+                d.year == year && d.monthValue == month
+            }
+        val fmtDay = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("es"))
+        return sales
+            .groupBy { Instant.ofEpochMilli(it.soldAtEpochMs).atZone(zone).toLocalDate() }
+            .toList()
+            .sortedBy { it.first }
+            .map { (d, list) ->
+                AccountingBucket(
+                    periodKey = d.toString(),
+                    displayLabel = d.format(fmtDay),
+                    totalAmount = list.sumOf { it.totalAmount },
+                    totalPolesSold = list.sumOf { it.quantitySold },
+                    saleCount = list.size,
+                )
+            }
+    }
+
+    fun salesAggregatedMonthly(
+        year: Int,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): List<AccountingBucket> {
+        val sales =
+            loadAllSales().filter {
+                val d = Instant.ofEpochMilli(it.soldAtEpochMs).atZone(zone).toLocalDate()
+                d.year == year
+            }
+        val fmtMonth = DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es"))
+        return (1..12).map { m ->
+            val ym = YearMonth.of(year, m)
+            val list =
+                sales.filter {
+                    val d = Instant.ofEpochMilli(it.soldAtEpochMs).atZone(zone).toLocalDate()
+                    d.year == year && d.monthValue == m
+                }
+            AccountingBucket(
+                periodKey = ym.toString(),
+                displayLabel = ym.atDay(1).format(fmtMonth).replaceFirstChar { it.titlecase(Locale("es")) },
+                totalAmount = list.sumOf { it.totalAmount },
+                totalPolesSold = list.sumOf { it.quantitySold },
+                saleCount = list.size,
+            )
+        }
+    }
+
+    fun salesAggregatedYearly(zone: ZoneId = ZoneId.systemDefault()): List<AccountingBucket> {
+        val sales = loadAllSales()
+        val fmtYear = DateTimeFormatter.ofPattern("yyyy", Locale("es"))
+        return sales
+            .groupBy {
+                Year.from(Instant.ofEpochMilli(it.soldAtEpochMs).atZone(zone).toLocalDate())
+            }
+            .toList()
+            .sortedByDescending { it.first }
+            .map { (y, list) ->
+                val firstDay = LocalDate.of(y.value, 1, 1)
+                AccountingBucket(
+                    periodKey = y.toString(),
+                    displayLabel = firstDay.format(fmtYear),
+                    totalAmount = list.sumOf { it.totalAmount },
+                    totalPolesSold = list.sumOf { it.quantitySold },
+                    saleCount = list.size,
+                )
+            }
+    }
 
     fun upsertProduct(
         id: Int?,
@@ -97,6 +420,7 @@ class InventoryRepository {
         quantity: Double,
         notes: String?,
         catalogProductId: Int?,
+        providerId: Int?,
         standardSalePrice: Double?,
         failedSalePrice: Double?,
     ): Int =
@@ -111,6 +435,7 @@ class InventoryRepository {
                     it[ProductsTable.notes] = notes
                     it[ProductsTable.createdAtEpochMs] = now
                     it[ProductsTable.catalogProductId] = catalogProductId
+                    it[ProductsTable.providerId] = providerId
                     it[ProductsTable.isFailed] = false
                     it[ProductsTable.failedAtStage] = null
                     it[ProductsTable.standardSalePrice] = standardSalePrice
@@ -124,6 +449,7 @@ class InventoryRepository {
                     it[ProductsTable.quantity] = quantity
                     it[ProductsTable.notes] = notes
                     it[ProductsTable.catalogProductId] = catalogProductId
+                    it[ProductsTable.providerId] = providerId
                     it[ProductsTable.standardSalePrice] = standardSalePrice
                     it[ProductsTable.failedSalePrice] = failedSalePrice
                 }
@@ -234,6 +560,96 @@ class InventoryRepository {
     fun deleteResource(id: Int) {
         transaction {
             ResourcesTable.deleteWhere { ResourcesTable.id eq id }
+        }
+    }
+
+    fun listStageResourceTemplates(fromStage: ProductStage): List<StageResourceTemplate> =
+        transaction {
+            (StageResourceTemplatesTable innerJoin ResourcesTable)
+                .selectAll()
+                .where { StageResourceTemplatesTable.fromStage eq fromStage.name }
+                .orderBy(StageResourceTemplatesTable.displayOrder to SortOrder.ASC)
+                .orderBy(ResourcesTable.name to SortOrder.ASC)
+                .map {
+                    StageResourceTemplate(
+                        id = it[StageResourceTemplatesTable.id],
+                        fromStage = ProductStage.fromDb(it[StageResourceTemplatesTable.fromStage]),
+                        resourceId = it[StageResourceTemplatesTable.resourceId],
+                        resourceName = it[ResourcesTable.name],
+                        resourceUnit = it[ResourcesTable.unit],
+                        amountPerPole = it[StageResourceTemplatesTable.amountPerPole],
+                        notes = it[StageResourceTemplatesTable.notes],
+                        displayOrder = it[StageResourceTemplatesTable.displayOrder],
+                    )
+                }
+        }
+
+    /**
+     * Cantidades sugeridas para una transformación: receta × número de postes.
+     * El operador puede ajustarlas en el diálogo antes de registrar.
+     */
+    fun suggestResourceUsesFromRecipe(
+        fromStage: ProductStage,
+        poleCount: Double,
+    ): List<ResourceUse> {
+        if (poleCount <= 0) return emptyList()
+        return listStageResourceTemplates(fromStage).map { t ->
+            ResourceUse(
+                resourceId = t.resourceId,
+                amount = t.amountPerPole * poleCount,
+                label = t.notes.orEmpty(),
+            )
+        }
+    }
+
+    fun upsertStageResourceTemplate(
+        id: Int?,
+        fromStage: ProductStage,
+        resourceId: Int,
+        amountPerPole: Double,
+        notes: String?,
+        displayOrder: Int,
+    ): Int =
+        transaction {
+            if (id != null) {
+                StageResourceTemplatesTable.update({ StageResourceTemplatesTable.id eq id }) {
+                    it[StageResourceTemplatesTable.fromStage] = fromStage.name
+                    it[StageResourceTemplatesTable.resourceId] = resourceId
+                    it[StageResourceTemplatesTable.amountPerPole] = amountPerPole
+                    it[StageResourceTemplatesTable.notes] = notes
+                    it[StageResourceTemplatesTable.displayOrder] = displayOrder
+                }
+                return@transaction id
+            }
+            val existing =
+                StageResourceTemplatesTable
+                    .selectAll()
+                    .where {
+                        (StageResourceTemplatesTable.fromStage eq fromStage.name) and
+                            (StageResourceTemplatesTable.resourceId eq resourceId)
+                    }
+                    .firstOrNull()
+            if (existing != null) {
+                val eid = existing[StageResourceTemplatesTable.id]
+                StageResourceTemplatesTable.update({ StageResourceTemplatesTable.id eq eid }) {
+                    it[StageResourceTemplatesTable.amountPerPole] = amountPerPole
+                    it[StageResourceTemplatesTable.notes] = notes
+                    it[StageResourceTemplatesTable.displayOrder] = displayOrder
+                }
+                return@transaction eid
+            }
+            StageResourceTemplatesTable.insert {
+                it[StageResourceTemplatesTable.fromStage] = fromStage.name
+                it[StageResourceTemplatesTable.resourceId] = resourceId
+                it[StageResourceTemplatesTable.amountPerPole] = amountPerPole
+                it[StageResourceTemplatesTable.notes] = notes
+                it[StageResourceTemplatesTable.displayOrder] = displayOrder
+            }[StageResourceTemplatesTable.id]
+        }
+
+    fun deleteStageResourceTemplate(templateId: Int) {
+        transaction {
+            StageResourceTemplatesTable.deleteWhere { StageResourceTemplatesTable.id eq templateId }
         }
     }
 
@@ -366,6 +782,7 @@ class InventoryRepository {
             val inheritedName = first[ProductsTable.name]
             val inheritedLine = first[ProductsTable.productLine]
             val inheritedCatalog = first[ProductsTable.catalogProductId]
+            val inheritedProvider = first[ProductsTable.providerId]
             val inheritedStandardPrice = first[ProductsTable.standardSalePrice]
             val inheritedFailedPrice = first[ProductsTable.failedSalePrice]
 
@@ -388,40 +805,55 @@ class InventoryRepository {
                 }
             }
 
+            var successProductId: Int? = null
+            var failedProductId: Int? = null
+
             if (successCount > 0.0) {
-                ProductsTable.insert {
-                    it[ProductsTable.name] = inheritedName
-                    it[ProductsTable.productLine] = inheritedLine
-                    it[ProductsTable.stage] = toStage.name
-                    it[ProductsTable.quantity] = successCount
-                    it[ProductsTable.notes] =
-                        "Producto de la transformación #$transformationId " +
-                            "(${fromStage.shortCode} → ${toStage.shortCode})"
-                    it[ProductsTable.createdAtEpochMs] = now
-                    it[ProductsTable.catalogProductId] = inheritedCatalog
-                    it[ProductsTable.isFailed] = false
-                    it[ProductsTable.failedAtStage] = null
-                    it[ProductsTable.standardSalePrice] = inheritedStandardPrice
-                    it[ProductsTable.failedSalePrice] = inheritedFailedPrice
-                }
+                successProductId =
+                    ProductsTable.insert {
+                        it[ProductsTable.name] = inheritedName
+                        it[ProductsTable.productLine] = inheritedLine
+                        it[ProductsTable.stage] = toStage.name
+                        it[ProductsTable.quantity] = successCount
+                        it[ProductsTable.notes] =
+                            "Producto de la transformación #$transformationId " +
+                                "(${fromStage.shortCode} → ${toStage.shortCode})"
+                        it[ProductsTable.createdAtEpochMs] = now
+                        it[ProductsTable.catalogProductId] = inheritedCatalog
+                        it[ProductsTable.providerId] = inheritedProvider
+                        it[ProductsTable.isFailed] = false
+                        it[ProductsTable.failedAtStage] = null
+                        it[ProductsTable.standardSalePrice] = inheritedStandardPrice
+                        it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                    }[ProductsTable.id]
             }
 
             if (failedCount > 0.0) {
-                ProductsTable.insert {
-                    it[ProductsTable.name] = inheritedName
-                    it[ProductsTable.productLine] = inheritedLine
-                    it[ProductsTable.stage] = fromStage.name
-                    it[ProductsTable.quantity] = failedCount
-                    it[ProductsTable.notes] =
-                        "Fallado durante la transformación #$transformationId en ${fromStage.shortCode}"
-                    it[ProductsTable.createdAtEpochMs] = now
-                    it[ProductsTable.catalogProductId] = inheritedCatalog
-                    it[ProductsTable.isFailed] = true
-                    it[ProductsTable.failedAtStage] = fromStage.name
-                    it[ProductsTable.standardSalePrice] = inheritedStandardPrice
-                    it[ProductsTable.failedSalePrice] = inheritedFailedPrice
-                }
+                failedProductId =
+                    ProductsTable.insert {
+                        it[ProductsTable.name] = inheritedName
+                        it[ProductsTable.productLine] = inheritedLine
+                        it[ProductsTable.stage] = fromStage.name
+                        it[ProductsTable.quantity] = failedCount
+                        it[ProductsTable.notes] =
+                            "Fallado durante la transformación #$transformationId en ${fromStage.shortCode}"
+                        it[ProductsTable.createdAtEpochMs] = now
+                        it[ProductsTable.catalogProductId] = inheritedCatalog
+                        it[ProductsTable.providerId] = inheritedProvider
+                        it[ProductsTable.isFailed] = true
+                        it[ProductsTable.failedAtStage] = fromStage.name
+                        it[ProductsTable.standardSalePrice] = inheritedStandardPrice
+                        it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                    }[ProductsTable.id]
             }
+
+            // Costo del proceso se asocia al lote resultante (prefiere el exitoso).
+            val costProductId =
+                successProductId
+                    ?: failedProductId
+                    ?: return@transaction TransformationResult.Err(
+                        "La transformación no produjo ningún lote (éxitos y fallados son cero).",
+                    )
 
             val resourcesById =
                 ResourcesTable
@@ -432,7 +864,7 @@ class InventoryRepository {
                 val r = resourcesById[u.resourceId] ?: return@forEach
                 val cpu = r[ResourcesTable.costPerUnit]
                 ProcessCostsTable.insert {
-                    it[ProcessCostsTable.productId] = first[ProductsTable.id]
+                    it[ProcessCostsTable.productId] = costProductId
                     it[ProcessCostsTable.transformationId] = transformationId
                     it[ProcessCostsTable.fromStage] = fromStage.name
                     it[ProcessCostsTable.toStage] = toStage.name
@@ -579,10 +1011,30 @@ class InventoryRepository {
             notes = this[ProductsTable.notes],
             createdAtEpochMs = this[ProductsTable.createdAtEpochMs],
             catalogProductId = this[ProductsTable.catalogProductId],
+            providerId = this[ProductsTable.providerId],
+            providerName = this.getOrNull(PoleProvidersTable.name),
             isFailed = this[ProductsTable.isFailed],
             failedAtStage = failedAtRaw?.let { ProductStage.fromDb(it) },
             standardSalePrice = this[ProductsTable.standardSalePrice],
             failedSalePrice = this[ProductsTable.failedSalePrice],
         )
     }
+
+    private fun ResultRow.toSaleRecord(): SaleRecord =
+        SaleRecord(
+            id = this[SalesTable.id],
+            productId = this[SalesTable.productId],
+            clientId = this[SalesTable.clientId],
+            clientName = this[ClientsTable.name],
+            quantitySold = this[SalesTable.quantitySold],
+            totalAmount = this[SalesTable.totalAmount],
+            unitPrice = this[SalesTable.unitPrice],
+            soldAtEpochMs = this[SalesTable.soldAtEpochMs],
+            notes = this[SalesTable.notes],
+            snapshotProductName = this[SalesTable.snapshotProductName],
+            snapshotProductLine = this[SalesTable.snapshotProductLine],
+            snapshotStage = ProductStage.fromDb(this[SalesTable.snapshotStage]),
+            snapshotWasFailed = this[SalesTable.snapshotWasFailed],
+            snapshotProviderName = this[SalesTable.snapshotProviderName],
+        )
 }

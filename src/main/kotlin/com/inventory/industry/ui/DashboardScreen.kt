@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.inventory.industry.data.InventoryFlowSummary
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.domain.ProductStage
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,7 @@ import kotlinx.coroutines.withContext
 fun DashboardScreen(repo: InventoryRepository) {
     var counts by remember { mutableStateOf<Map<ProductStage, Int>?>(null) }
     var polesByStage by remember { mutableStateOf<Map<ProductStage, Double>?>(null) }
+    var flow by remember { mutableStateOf<InventoryFlowSummary?>(null) }
     var total by remember { mutableStateOf<Double?>(null) }
     var productCount by remember { mutableStateOf<Int?>(null) }
     var failedCount by remember { mutableStateOf<Int?>(null) }
@@ -38,6 +40,7 @@ fun DashboardScreen(repo: InventoryRepository) {
         withContext(Dispatchers.IO) {
             counts = repo.countByStage()
             polesByStage = repo.polesByStage()
+            flow = repo.inventoryFlowSummary()
             total = repo.totalProcessCost()
             productCount = repo.listProducts().size
             failedCount = repo.failedProductCount()
@@ -63,11 +66,56 @@ fun DashboardScreen(repo: InventoryRepository) {
             style = MaterialTheme.typography.bodyMedium,
         )
 
-        if (counts == null || polesByStage == null || total == null || productCount == null ||
+        if (counts == null || polesByStage == null || flow == null || total == null || productCount == null ||
             failedCount == null || failedValue == null || catalogCount == null
         ) {
             Text("Cargando…")
             return@Column
+        }
+
+        val f = flow!!
+
+        Text("Flujo de inventario", style = MaterialTheme.typography.titleMedium)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricRow(
+                    "Postes OK en proceso (Crudo / Descort. / Tratado)",
+                    formatQty(f.polesInProcessOk),
+                )
+                MetricRow(
+                    "Listos para venta estándar (Terminado, OK)",
+                    formatQty(f.polesReadyStandardSale),
+                )
+                MetricRow(
+                    "Stock fallado / saldo (vendible a otro precio)",
+                    formatQty(f.polesFailedSalvage),
+                )
+            }
+        }
+
+        Text("Detalle por etapa (postes OK vs fallados)", style = MaterialTheme.typography.titleMedium)
+        f.perStage.forEach { row ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "${row.stage.shortCode} — ${row.stage.title}",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Total: ${formatQty(row.totalPoles)} postes · ${row.lotCount} lote(s)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "OK (pueden seguir o venderse según etapa): ${formatQty(row.okPoles)}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Fallados en esta etapa: ${formatQty(row.failedPoles)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
         }
 
         MetricRow("Definiciones en catálogo", catalogCount!!.toString())
@@ -127,4 +175,3 @@ private fun MetricCard(
         }
     }
 }
-

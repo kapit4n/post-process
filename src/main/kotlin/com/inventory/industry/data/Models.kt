@@ -42,6 +42,8 @@ data class Product(
     val failedAtStage: ProductStage?,
     val standardSalePrice: Double?,
     val failedSalePrice: Double?,
+    /** Costo de adquisición por poste (materia prima), si se registró. */
+    val acquisitionCostPerPole: Double?,
 ) {
     /** Precio de venta aplicable (los fallados usan el precio de saldo). */
     fun effectiveSalePrice(): Double? =
@@ -81,7 +83,8 @@ data class StageResourceTemplate(
 
 data class ProcessCostLine(
     val id: Int,
-    val productId: Int,
+    /** Null si el lote se eliminó pero se conserva la línea para contabilidad. */
+    val productId: Int?,
     val transformationId: Int?,
     val fromStage: ProductStage,
     val toStage: ProductStage,
@@ -155,6 +158,38 @@ data class SaleRecord(
     val snapshotStage: ProductStage,
     val snapshotWasFailed: Boolean,
     val snapshotProviderName: String?,
+    val snapshotAcquisitionCostTotal: Double,
+    val snapshotProcessingCostTotal: Double,
+    val snapshotUnitCostBasis: Double?,
+    val snapshotMarginPercent: Double?,
+    val snapshotSuggestedTotal: Double?,
+)
+
+/** Vista previa de costos para una venta (antes de confirmar). */
+data class SaleCostPreview(
+    val quantityAvailable: Double,
+    val acquisitionCostPerPole: Double?,
+    val processingCostTotalOnLot: Double,
+    val processingCostPerPole: Double,
+    val unitCostBasis: Double,
+    val acquisitionTotalForSaleQty: Double,
+    val processingTotalForSaleQty: Double,
+    val suggestedUnitPrice: Double,
+    val suggestedTotal: Double,
+)
+
+/** Resumen de costos para la pantalla de contabilidad. */
+data class AccountingCostOverview(
+    /** Suma de todas las líneas de insumos registradas (incluye lotes ya vendidos / borrados). */
+    val totalProcessingCostAllTime: Double,
+    /** Líneas aún vinculadas a un lote en inventario. */
+    val processingCostAttributedToOpenStock: Double,
+    /** Suma de cantidad × costo de adquisición en lotes vivos (costo nulo → 0). */
+    val inventoryAcquisitionCostTotal: Double,
+    /** Costo de adquisición imputado en ventas registradas (snapshots). */
+    val soldAcquisitionCostTotal: Double,
+    /** Costo de procesamiento imputado en ventas registradas (snapshots). */
+    val soldProcessingCostTotal: Double,
 )
 
 /** Bucket para reportes diario / mensual / anual. */

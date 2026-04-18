@@ -262,6 +262,8 @@ class InventoryRepository {
         totalAmount: Double,
         soldAtEpochMs: Long,
         notes: String?,
+        /** Porcentaje de ganancia usado solo para guardar la estimación (ej. 20 = 20 %). */
+        marginPercentForEstimate: Double? = null,
     ): SaleRecordingResult =
         transaction {
             ClientsTable
@@ -309,6 +311,21 @@ class InventoryRepository {
 
             val unitPrice = if (quantitySold > 0) totalAmount / quantitySold else null
 
+            val acqPer = prow[ProductsTable.acquisitionCostPerPole]
+            val procTotalOnLot =
+                ProcessCostsTable
+                    .selectAll()
+                    .where { ProcessCostsTable.productId eq productId }
+                    .sumOf { it[ProcessCostsTable.lineCost] }
+            val procPerPole = if (qtyAvail > 1e-12) procTotalOnLot / qtyAvail else 0.0
+            val acqPortion = quantitySold * (acqPer ?: 0.0)
+            val procPortion = quantitySold * procPerPole
+            val unitBasis = (acqPer ?: 0.0) + procPerPole
+            val suggestedTotal =
+                marginPercentForEstimate?.let { m ->
+                    quantitySold * unitBasis * (1.0 + m / 100.0)
+                }
+
             val saleId =
                 SalesTable.insert {
                     it[SalesTable.productId] = productId
@@ -323,11 +340,15 @@ class InventoryRepository {
                     it[SalesTable.snapshotStage] = stage.name
                     it[SalesTable.snapshotWasFailed] = isFailed
                     it[SalesTable.snapshotProviderName] = provName
+                    it[SalesTable.snapshotAcquisitionCostTotal] = acqPortion
+                    it[SalesTable.snapshotProcessingCostTotal] = procPortion
+                    it[SalesTable.snapshotUnitCostBasis] = unitBasis
+                    it[SalesTable.snapshotMarginPercent] = marginPercentForEstimate
+                    it[SalesTable.snapshotSuggestedTotal] = suggestedTotal
                 }[SalesTable.id]
 
             val remaining = qtyAvail - quantitySold
             if (remaining <= 1e-6) {
-                ProcessCostsTable.deleteWhere { ProcessCostsTable.productId eq productId }
                 ProductsTable.deleteWhere { ProductsTable.id eq productId }
             } else {
                 ProductsTable.update({ ProductsTable.id eq productId }) {
@@ -423,6 +444,7 @@ class InventoryRepository {
         providerId: Int?,
         standardSalePrice: Double?,
         failedSalePrice: Double?,
+        acquisitionCostPerPole: Double?,
     ): Int =
         transaction {
             val now = System.currentTimeMillis()
@@ -440,6 +462,7 @@ class InventoryRepository {
                     it[ProductsTable.failedAtStage] = null
                     it[ProductsTable.standardSalePrice] = standardSalePrice
                     it[ProductsTable.failedSalePrice] = failedSalePrice
+                    it[ProductsTable.acquisitionCostPerPole] = acquisitionCostPerPole
                 }[ProductsTable.id]
             } else {
                 ProductsTable.update({ ProductsTable.id eq id }) {
@@ -452,6 +475,7 @@ class InventoryRepository {
                     it[ProductsTable.providerId] = providerId
                     it[ProductsTable.standardSalePrice] = standardSalePrice
                     it[ProductsTable.failedSalePrice] = failedSalePrice
+                    it[ProductsTable.acquisitionCostPerPole] = acquisitionCostPerPole
                 }
                 id
             }
@@ -459,10 +483,106 @@ class InventoryRepository {
 
     fun deleteProduct(id: Int) {
         transaction {
-            ProcessCostsTable.deleteWhere { ProcessCostsTable.productId eq id }
             ProductsTable.deleteWhere { ProductsTable.id eq id }
         }
     }
+
+    /**
+     * Costos de insumo imputables al inventario actual (líneas con [ProcessCostsTable.productId] no nulo)
+     * y totales históricos / valor de compra en stock.
+     */
+    fun accountingCostOverview(): AccountingCostOverview =
+        transaction {
+            val allTimeExpr = ProcessCostsTable.lineCost.sum()
+            val allTime =
+                ProcessCostsTable
+                    .select(allTimeExpr)
+                    .firstOrNull()
+                    ?.getOrNull(allTimeExpr)
+                    ?: 0.0
+            val openExpr = ProcessCostsTable.lineCost.sum()
+            val onOpen =
+                ProcessCostsTable
+                    .select(openExpr)
+                    .where { ProcessCostsTable.productId.isNotNull() }
+                    .firstOrNull()
+                    ?.getOrNull(openExpr)
+                    ?: 0.0
+            val invAcq =
+                ProductsTable
+                    .selectAll()
+                    .sumOf { r ->
+                        r[ProductsTable.quantity] * (r[ProductsTable.acquisitionCostPerPole] ?: 0.0)
+                    }
+            val soldAcqExpr = SalesTable.snapshotAcquisitionCostTotal.sum()
+            val soldAcq =
+                SalesTable
+                    .select(soldAcqExpr)
+                    .firstOrNull()
+                    ?.getOrNull(soldAcqExpr)
+                    ?: 0.0
+            val soldProcExpr = SalesTable.snapshotProcessingCostTotal.sum()
+            val soldProc =
+                SalesTable
+                    .select(soldProcExpr)
+                    .firstOrNull()
+                    ?.getOrNull(soldProcExpr)
+                    ?: 0.0
+            AccountingCostOverview(
+                totalProcessingCostAllTime = allTime,
+                processingCostAttributedToOpenStock = onOpen,
+                inventoryAcquisitionCostTotal = invAcq,
+                soldAcquisitionCostTotal = soldAcq,
+                soldProcessingCostTotal = soldProc,
+            )
+        }
+
+    /** Costo de procesamiento (insumos) acumulado en un lote. */
+    fun processingCostTotalForProduct(productId: Int): Double =
+        transaction {
+            ProcessCostsTable
+                .selectAll()
+                .where { ProcessCostsTable.productId eq productId }
+                .sumOf { it[ProcessCostsTable.lineCost] }
+        }
+
+    /**
+     * Vista previa para venta: costo por poste (adquisición + proceso prorrateado) y precio sugerido.
+     */
+    fun saleCostPreview(
+        productId: Int,
+        quantitySold: Double,
+        marginPercent: Double,
+    ): SaleCostPreview? =
+        transaction {
+            val row =
+                ProductsTable
+                    .selectAll()
+                    .where { ProductsTable.id eq productId }
+                    .singleOrNull() ?: return@transaction null
+            val qtyAvail = row[ProductsTable.quantity]
+            if (quantitySold <= 1e-12 || qtyAvail <= 1e-12) return@transaction null
+            val acq = row[ProductsTable.acquisitionCostPerPole]
+            val procTotal =
+                ProcessCostsTable
+                    .selectAll()
+                    .where { ProcessCostsTable.productId eq productId }
+                    .sumOf { it[ProcessCostsTable.lineCost] }
+            val procPerPole = procTotal / qtyAvail
+            val unitBasis = (acq ?: 0.0) + procPerPole
+            val sugUnit = unitBasis * (1.0 + marginPercent / 100.0)
+            SaleCostPreview(
+                quantityAvailable = qtyAvail,
+                acquisitionCostPerPole = acq,
+                processingCostTotalOnLot = procTotal,
+                processingCostPerPole = procPerPole,
+                unitCostBasis = unitBasis,
+                acquisitionTotalForSaleQty = quantitySold * (acq ?: 0.0),
+                processingTotalForSaleQty = quantitySold * procPerPole,
+                suggestedUnitPrice = sugUnit,
+                suggestedTotal = quantitySold * sugUnit,
+            )
+        }
 
     fun countByStage(): Map<ProductStage, Int> =
         transaction {
@@ -785,6 +905,12 @@ class InventoryRepository {
             val inheritedProvider = first[ProductsTable.providerId]
             val inheritedStandardPrice = first[ProductsTable.standardSalePrice]
             val inheritedFailedPrice = first[ProductsTable.failedSalePrice]
+            val acqNumerator =
+                sources.sumOf { (row, takeQty) ->
+                    takeQty * (row[ProductsTable.acquisitionCostPerPole] ?: 0.0)
+                }
+            val blendedAcq: Double? =
+                if (totalInput > 1e-12 && acqNumerator > 1e-12) acqNumerator / totalInput else null
 
             sources.forEach { (row, takeQty) ->
                 val sourceId = row[ProductsTable.id]
@@ -825,6 +951,7 @@ class InventoryRepository {
                         it[ProductsTable.failedAtStage] = null
                         it[ProductsTable.standardSalePrice] = inheritedStandardPrice
                         it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                        it[ProductsTable.acquisitionCostPerPole] = blendedAcq
                     }[ProductsTable.id]
             }
 
@@ -844,6 +971,7 @@ class InventoryRepository {
                         it[ProductsTable.failedAtStage] = fromStage.name
                         it[ProductsTable.standardSalePrice] = inheritedStandardPrice
                         it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                        it[ProductsTable.acquisitionCostPerPole] = blendedAcq
                     }[ProductsTable.id]
             }
 
@@ -1017,6 +1145,7 @@ class InventoryRepository {
             failedAtStage = failedAtRaw?.let { ProductStage.fromDb(it) },
             standardSalePrice = this[ProductsTable.standardSalePrice],
             failedSalePrice = this[ProductsTable.failedSalePrice],
+            acquisitionCostPerPole = this[ProductsTable.acquisitionCostPerPole],
         )
     }
 
@@ -1036,5 +1165,10 @@ class InventoryRepository {
             snapshotStage = ProductStage.fromDb(this[SalesTable.snapshotStage]),
             snapshotWasFailed = this[SalesTable.snapshotWasFailed],
             snapshotProviderName = this[SalesTable.snapshotProviderName],
+            snapshotAcquisitionCostTotal = this[SalesTable.snapshotAcquisitionCostTotal],
+            snapshotProcessingCostTotal = this[SalesTable.snapshotProcessingCostTotal],
+            snapshotUnitCostBasis = this[SalesTable.snapshotUnitCostBasis],
+            snapshotMarginPercent = this[SalesTable.snapshotMarginPercent],
+            snapshotSuggestedTotal = this[SalesTable.snapshotSuggestedTotal],
         )
 }

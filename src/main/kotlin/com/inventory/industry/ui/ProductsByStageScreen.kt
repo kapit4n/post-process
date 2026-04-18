@@ -194,6 +194,7 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                             providerId = draft.providerId,
                             standardSalePrice = draft.standardSalePrice,
                             failedSalePrice = draft.failedSalePrice,
+                            acquisitionCostPerPole = draft.acquisitionCostPerPole,
                         )
                     }
                     showEditor = false
@@ -247,6 +248,7 @@ data class ProductDraft(
     val providerId: Int?,
     val standardSalePrice: Double?,
     val failedSalePrice: Double?,
+    val acquisitionCostPerPole: Double?,
 )
 
 @Composable
@@ -387,6 +389,7 @@ private fun ProductEditorDialog(
     var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
     var standardPrice by remember { mutableStateOf(initial?.standardSalePrice?.toString() ?: "") }
     var failedPrice by remember { mutableStateOf(initial?.failedSalePrice?.toString() ?: "") }
+    var acquisitionCost by remember { mutableStateOf(initial?.acquisitionCostPerPole?.toString() ?: "") }
 
     LaunchedEffect(Unit) {
         catalog = withContext(Dispatchers.IO) { repo.listCatalogProducts() }
@@ -473,6 +476,16 @@ private fun ProductEditorDialog(
                 }
                 TextField(value = qty, onValueChange = { qty = it }, label = { Text("Cantidad") })
                 TextField(
+                    value = acquisitionCost,
+                    onValueChange = { acquisitionCost = it },
+                    label = { Text("Costo de adquisición por poste (opcional)") },
+                )
+                Text(
+                    "Típico al ingresar en Crudo. En transformaciones se promedia con el peso de cada lote fuente.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextField(
                     value = standardPrice,
                     onValueChange = { standardPrice = it },
                     label = { Text("Precio de venta estándar (opcional)") },
@@ -501,6 +514,7 @@ private fun ProductEditorDialog(
                             providerId = providerId,
                             standardSalePrice = standardPrice.toDoubleOrNull(),
                             failedSalePrice = failedPrice.toDoubleOrNull(),
+                            acquisitionCostPerPole = acquisitionCost.toDoubleOrNull(),
                         ),
                     )
                 },

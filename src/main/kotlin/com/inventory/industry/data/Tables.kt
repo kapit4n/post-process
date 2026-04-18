@@ -55,6 +55,8 @@ object ProductsTable : Table("products") {
     val failedAtStage = varchar("failed_at_stage", 32).nullable()
     val standardSalePrice = double("standard_sale_price").nullable()
     val failedSalePrice = double("failed_sale_price").nullable()
+    /** Costo estimado de adquisición por poste (tronco / materia prima) al ingresar el lote. */
+    val acquisitionCostPerPole = double("acquisition_cost_per_pole").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -120,8 +122,11 @@ object TransformationInputsTable : Table("transformation_inputs") {
 /** Costos por insumo (asociados a un producto y opcionalmente a la transformación). */
 object ProcessCostsTable : Table("process_costs") {
     val id = integer("id").autoIncrement()
+    /** Si el lote se elimina, se conserva la fila para contabilidad (product_id = null). */
     val productId =
-        integer("product_id").references(ProductsTable.id, onDelete = ReferenceOption.CASCADE)
+        integer("product_id")
+            .references(ProductsTable.id, onDelete = ReferenceOption.SET_NULL)
+            .nullable()
     val transformationId =
         integer("transformation_id")
             .references(TransformationsTable.id, onDelete = ReferenceOption.SET_NULL)
@@ -160,5 +165,15 @@ object SalesTable : Table("sales") {
     val snapshotStage = varchar("snapshot_stage", 32)
     val snapshotWasFailed = bool("snapshot_was_failed")
     val snapshotProviderName = varchar("snapshot_provider_name", 255).nullable()
+    /** Costo de adquisición imputado a esta venta (cantidad × costo/poste al momento de la venta). */
+    val snapshotAcquisitionCostTotal = double("snapshot_acquisition_cost_total").default(0.0)
+    /** Costo de procesamiento (insumos) imputado proporcionalmente al lote vendido. */
+    val snapshotProcessingCostTotal = double("snapshot_processing_cost_total").default(0.0)
+    /** Costo total unitario (adquisición + proceso) usado para la estimación. */
+    val snapshotUnitCostBasis = double("snapshot_unit_cost_basis").nullable()
+    /** % de ganancia aplicado en la estimación (ej. 20 = 20 %). */
+    val snapshotMarginPercent = double("snapshot_margin_percent").nullable()
+    /** Precio total sugerido antes de la venta (opcional, para auditoría). */
+    val snapshotSuggestedTotal = double("snapshot_suggested_total").nullable()
     override val primaryKey = PrimaryKey(id)
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.Client
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Product
+import com.inventory.industry.data.SaleCostPreview
 import com.inventory.industry.data.SaleRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,9 +44,11 @@ fun SalesScreen(repo: InventoryRepository) {
     var productId by remember { mutableStateOf<Int?>(null) }
     var qtyText by remember { mutableStateOf("1") }
     var totalText by remember { mutableStateOf("") }
+    var marginText by remember { mutableStateOf("20") }
     var whenText by remember { mutableStateOf(formatEpochMs(System.currentTimeMillis())) }
     var saleNotes by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var costPreview by remember { mutableStateOf<SaleCostPreview?>(null) }
     val scope = rememberCoroutineScope()
 
     fun reloadLists() {
@@ -83,6 +86,20 @@ fun SalesScreen(repo: InventoryRepository) {
             }
     }
 
+    LaunchedEffect(selectedProduct?.id, qtyText, marginText) {
+        val p = selectedProduct
+        val q = qtyText.toDoubleOrNull()
+        val m = marginText.toDoubleOrNull()
+        if (p == null || q == null || m == null || q <= 1e-12) {
+            costPreview = null
+            return@LaunchedEffect
+        }
+        costPreview =
+            withContext(Dispatchers.IO) {
+                repo.saleCostPreview(productId = p.id, quantitySold = q, marginPercent = m)
+            }
+    }
+
     Scaffold { padding ->
         Column(
             modifier =
@@ -99,7 +116,7 @@ fun SalesScreen(repo: InventoryRepository) {
             )
             Text(
                 "Venta de postes en estado Terminado (OK) o lotes fallados a precio de saldo. " +
-                    "Se registra el precio real cobrado para contabilidad.",
+                    "El precio sugerido suma adquisición, procesamiento (insumos del lote) y un % de ganancia.",
                 style = MaterialTheme.typography.bodyMedium,
             )
 
@@ -153,11 +170,55 @@ fun SalesScreen(repo: InventoryRepository) {
                     modifier = Modifier.weight(1f),
                 )
                 TextField(
+                    value = marginText,
+                    onValueChange = { marginText = it },
+                    label = { Text("% ganancia (estim.)") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextField(
                     value = totalText,
                     onValueChange = { totalText = it },
                     label = { Text("Total cobrado") },
                     modifier = Modifier.weight(1f),
                 )
+                OutlinedButton(
+                    onClick = {
+                        val prev = costPreview ?: return@OutlinedButton
+                        totalText = formatMoney(prev.suggestedTotal)
+                    },
+                    enabled = costPreview != null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Usar sugerido")
+                }
+            }
+            costPreview?.let { prev ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Estimación de costo y precio", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Adquisición (esta venta): ${formatMoney(prev.acquisitionTotalForSaleQty)} · " +
+                                "Proceso (insumos, prorrateado): ${formatMoney(prev.processingTotalForSaleQty)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Costo unitario (adq. + proceso): ${formatMoney(prev.unitCostBasis)} · " +
+                                "Sugerido / poste: ${formatMoney(prev.suggestedUnitPrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "Total sugerido (${marginText.trim()} %): ${formatMoney(prev.suggestedTotal)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
             }
             TextField(
                 value = whenText,
@@ -207,6 +268,7 @@ fun SalesScreen(repo: InventoryRepository) {
                                     totalAmount = total,
                                     soldAtEpochMs = whenMs,
                                     notes = saleNotes.trim().ifBlank { null },
+                                    marginPercentForEstimate = marginText.toDoubleOrNull(),
                                 )
                             }
                         when (result) {
@@ -241,6 +303,21 @@ fun SalesScreen(repo: InventoryRepository) {
                                 "${s.snapshotProductName} · ${formatQty(s.quantitySold)} postes · ${formatMoney(s.totalAmount)}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            if (s.snapshotAcquisitionCostTotal > 1e-9 || s.snapshotProcessingCostTotal > 1e-9) {
+                                Text(
+                                    "Costo imputado: adq. ${formatMoney(s.snapshotAcquisitionCostTotal)} · " +
+                                        "proc. ${formatMoney(s.snapshotProcessingCostTotal)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            s.snapshotSuggestedTotal?.let { sug ->
+                                Text(
+                                    "Sugerido al vender: ${formatMoney(sug)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             Text(
                                 "${s.snapshotStage.shortCode} · ${if (s.snapshotWasFailed) "Saldo" else "OK"}",
                                 style = MaterialTheme.typography.bodySmall,

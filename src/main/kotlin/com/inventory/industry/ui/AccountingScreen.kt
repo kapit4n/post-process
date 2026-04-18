@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.AccountingBucket
+import com.inventory.industry.data.AccountingCostOverview
 import com.inventory.industry.data.InventoryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,9 +40,17 @@ fun AccountingScreen(repo: InventoryRepository) {
     var dailyRows by remember { mutableStateOf<List<AccountingBucket>>(emptyList()) }
     var monthlyRows by remember { mutableStateOf<List<AccountingBucket>>(emptyList()) }
     var yearlyRows by remember { mutableStateOf<List<AccountingBucket>>(emptyList()) }
+    var costOverview by remember { mutableStateOf<AccountingCostOverview?>(null) }
 
     val year = yearText.toIntOrNull() ?: today.year
     val month = monthText.toIntOrNull()?.coerceIn(1, 12) ?: today.monthValue
+
+    LaunchedEffect(Unit) {
+        costOverview =
+            withContext(Dispatchers.IO) {
+                repo.accountingCostOverview()
+            }
+    }
 
     LaunchedEffect(tab, year, month) {
         when (tab) {
@@ -76,6 +85,37 @@ fun AccountingScreen(repo: InventoryRepository) {
             "Totales por día, mes o año según la fecha registrada en cada venta.",
             style = MaterialTheme.typography.bodyMedium,
         )
+        costOverview?.let { o ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Costos (inventario y proceso)", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Procesamiento acumulado (histórico, todas las líneas de insumo): " +
+                            formatMoney(o.totalProcessingCostAllTime),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Procesamiento aún imputado a lotes en stock: " +
+                            formatMoney(o.processingCostAttributedToOpenStock),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "Valor de adquisición en inventario (cantidad × costo/poste): " +
+                            formatMoney(o.inventoryAcquisitionCostTotal),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    HorizontalDivider()
+                    Text(
+                        "En ventas ya registradas — adquisición imputada: " +
+                            formatMoney(o.soldAcquisitionCostTotal) +
+                            " · proceso imputado: " +
+                            formatMoney(o.soldProcessingCostTotal),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
         TabRow(selectedTabIndex = tab) {
             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Diario") })
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Mensual") })

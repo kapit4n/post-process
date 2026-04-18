@@ -21,7 +21,9 @@ object IndustryDatabase {
                 PoleProvidersTable,
                 ClientsTable,
                 ProductsTable,
+                AcquisitionTransportCostsTable,
                 ResourcesTable,
+                ResourceStockLotsTable,
                 StageResourceTemplatesTable,
                 TransformationsTable,
                 TransformationInputsTable,
@@ -31,5 +33,6 @@ object IndustryDatabase {
         }
         seedDefaultResourcesIfEmpty()
         seedDefaultStageTemplatesIfEmpty()
+        seedDemoResourceStockLotsIfEmpty()
     }
 }

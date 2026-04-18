@@ -202,12 +202,14 @@ fun SalesScreen(repo: InventoryRepository) {
                     ) {
                         Text("Estimación de costo y precio", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Adquisición (esta venta): ${formatMoney(prev.acquisitionTotalForSaleQty)} · " +
-                                "Proceso (insumos, prorrateado): ${formatMoney(prev.processingTotalForSaleQty)}",
+                            "Adquisición esta venta: ${formatMoney(prev.acquisitionTotalForSaleQty)} " +
+                                "(material ${formatMoney(prev.acquisitionMaterialTotalForSaleQty)} · " +
+                                "traslado ${formatMoney(prev.acquisitionTransportTotalForSaleQty)}) · " +
+                                "Proceso: ${formatMoney(prev.processingTotalForSaleQty)}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Text(
-                            "Costo unitario (adq. + proceso): ${formatMoney(prev.unitCostBasis)} · " +
+                            "Costo unitario (material+traslado+proceso): ${formatMoney(prev.unitCostBasis)} · " +
                                 "Sugerido / poste: ${formatMoney(prev.suggestedUnitPrice)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -305,7 +307,9 @@ fun SalesScreen(repo: InventoryRepository) {
                             )
                             if (s.snapshotAcquisitionCostTotal > 1e-9 || s.snapshotProcessingCostTotal > 1e-9) {
                                 Text(
-                                    "Costo imputado: adq. ${formatMoney(s.snapshotAcquisitionCostTotal)} · " +
+                                    "Costo imputado: adq. ${formatMoney(s.snapshotAcquisitionCostTotal)} " +
+                                        "(mat. ${formatMoney(s.snapshotAcquisitionMaterialTotal)} · " +
+                                        "trasl. ${formatMoney(s.snapshotAcquisitionTransportTotal)}) · " +
                                         "proc. ${formatMoney(s.snapshotProcessingCostTotal)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

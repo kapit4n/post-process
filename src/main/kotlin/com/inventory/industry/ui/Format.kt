@@ -1,6 +1,7 @@
 package com.inventory.industry.ui
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -29,6 +30,25 @@ fun parseDateTime(input: String): Long? {
 fun formatQty(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f".format(v)
 
 fun formatMoney(v: Double): String = "%.2f".format(v)
+
+private val ISO_DATE: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+/** Fecha local → yyyy-MM-dd */
+fun formatIsoDate(d: LocalDate): String = d.format(ISO_DATE)
+
+/** Texto yyyy-MM-dd → fecha; null si vacío o inválido. */
+fun parseIsoDate(input: String): LocalDate? {
+    val t = input.trim()
+    if (t.isEmpty()) return null
+    return try {
+        LocalDate.parse(t, ISO_DATE)
+    } catch (_: DateTimeParseException) {
+        null
+    }
+}
+
+fun formatIsoDateOrDash(d: LocalDate?): String =
+    if (d == null) "—" else formatIsoDate(d)
 
 fun formatDuration(minutes: Int): String {
     if (minutes < 60) return "${minutes} min"

@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -48,12 +50,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.inventory.industry.data.AcquisitionTransportLineDraft
 import com.inventory.industry.data.CatalogProduct
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.PoleProvider
 import com.inventory.industry.data.Product
 import com.inventory.industry.data.Resource
 import com.inventory.industry.data.StageResourceTemplate
+import com.inventory.industry.domain.PoleStorageLocation
 import com.inventory.industry.domain.ProductStage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -183,18 +187,25 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
             onSave = { draft ->
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        repo.upsertProduct(
-                            id = draft.id,
-                            name = draft.name,
-                            productLine = draft.productLine,
-                            stage = draft.stage,
-                            quantity = draft.quantity,
-                            notes = draft.notes,
-                            catalogProductId = draft.catalogProductId,
-                            providerId = draft.providerId,
-                            standardSalePrice = draft.standardSalePrice,
-                            failedSalePrice = draft.failedSalePrice,
-                            acquisitionCostPerPole = draft.acquisitionCostPerPole,
+                        val pid =
+                            repo.upsertProduct(
+                                id = draft.id,
+                                name = draft.name,
+                                productLine = draft.productLine,
+                                stage = draft.stage,
+                                quantity = draft.quantity,
+                                notes = draft.notes,
+                                catalogProductId = draft.catalogProductId,
+                                providerId = draft.providerId,
+                                standardSalePrice = draft.standardSalePrice,
+                                failedSalePrice = draft.failedSalePrice,
+                                acquisitionCostPerPole = draft.acquisitionCostPerPole,
+                                acquisitionStorageLocation = draft.acquisitionStorageLocation,
+                            )
+                        repo.syncAcquisitionTransportCosts(
+                            productId = pid,
+                            location = draft.acquisitionStorageLocation,
+                            lines = draft.transportLines,
                         )
                     }
                     showEditor = false
@@ -237,6 +248,11 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
 
 private data class TransformTrigger(val preselectId: Int?)
 
+private data class TransportLineEditorRow(
+    val label: String,
+    val costText: String,
+)
+
 data class ProductDraft(
     val id: Int?,
     val name: String,
@@ -249,6 +265,8 @@ data class ProductDraft(
     val standardSalePrice: Double?,
     val failedSalePrice: Double?,
     val acquisitionCostPerPole: Double?,
+    val acquisitionStorageLocation: PoleStorageLocation,
+    val transportLines: List<AcquisitionTransportLineDraft>,
 )
 
 @Composable
@@ -390,17 +408,52 @@ private fun ProductEditorDialog(
     var standardPrice by remember { mutableStateOf(initial?.standardSalePrice?.toString() ?: "") }
     var failedPrice by remember { mutableStateOf(initial?.failedSalePrice?.toString() ?: "") }
     var acquisitionCost by remember { mutableStateOf(initial?.acquisitionCostPerPole?.toString() ?: "") }
+    var storageLocation by remember(initial?.id) {
+        mutableStateOf(initial?.acquisitionStorageLocation ?: PoleStorageLocation.FABRICA)
+    }
+    val transportLineRows = remember { mutableStateListOf<TransportLineEditorRow>() }
+    val scroll = rememberScrollState()
 
     LaunchedEffect(Unit) {
         catalog = withContext(Dispatchers.IO) { repo.listCatalogProducts() }
         providers = withContext(Dispatchers.IO) { repo.listPoleProviders() }
     }
 
+    LaunchedEffect(initial?.id) {
+        storageLocation = initial?.acquisitionStorageLocation ?: PoleStorageLocation.FABRICA
+        transportLineRows.clear()
+        if (initial?.id != null) {
+            val lines =
+                withContext(Dispatchers.IO) {
+                    repo.listAcquisitionTransportForProduct(initial.id)
+                }
+            if (lines.isEmpty()) {
+                transportLineRows.add(TransportLineEditorRow("Camión", ""))
+                transportLineRows.add(TransportLineEditorRow("Cargador / excavadora", ""))
+            } else {
+                lines.forEach { ln ->
+                    transportLineRows.add(
+                        TransportLineEditorRow(ln.label, ln.lineCost.toString()),
+                    )
+                }
+            }
+        } else {
+            transportLineRows.add(TransportLineEditorRow("Camión", ""))
+            transportLineRows.add(TransportLineEditorRow("Cargador / excavadora", ""))
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Nuevo lote de postes" else "Editar lote") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier =
+                    Modifier
+                        .heightIn(max = 480.dp)
+                        .verticalScroll(scroll),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 if (catalog.isNotEmpty()) {
                     Text("Desde el catálogo", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -475,13 +528,80 @@ private fun ProductEditorDialog(
                     }
                 }
                 TextField(value = qty, onValueChange = { qty = it }, label = { Text("Cantidad") })
+                Text("Ubicación del lote al registrar la compra", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PoleStorageLocation.entries.forEach { loc ->
+                        OutlinedButton(
+                            onClick = { storageLocation = loc },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                loc.shortLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight =
+                                    if (storageLocation == loc) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+                Text(
+                    when (storageLocation) {
+                        PoleStorageLocation.FABRICA ->
+                            "En fábrica: no se cargan traslados aquí (el costo/poste es el material puesto en planta)."
+                        PoleStorageLocation.EN_PROVEEDOR ->
+                            "En proveedor: registre abajo el total del flete, cargador, etc. para el lote " +
+                                "(se reparte entre la cantidad de postes)."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 TextField(
                     value = acquisitionCost,
                     onValueChange = { acquisitionCost = it },
-                    label = { Text("Costo de adquisición por poste (opcional)") },
+                    label = { Text("Costo materia prima por poste — pago al proveedor (opcional)") },
                 )
+                if (storageLocation == PoleStorageLocation.EN_PROVEEDOR) {
+                    Text("Costos de traslado (total para todo el lote)", style = MaterialTheme.typography.labelLarge)
+                    transportLineRows.forEachIndexed { i, row ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextField(
+                                value = row.label,
+                                onValueChange = { v ->
+                                    transportLineRows[i] = row.copy(label = v)
+                                },
+                                label = { Text("Concepto") },
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextField(
+                                value = row.costText,
+                                onValueChange = { v ->
+                                    transportLineRows[i] = row.copy(costText = v)
+                                },
+                                label = { Text("Monto") },
+                                modifier = Modifier.weight(0.85f),
+                            )
+                            IconButton(
+                                onClick = {
+                                    if (transportLineRows.size > 1) transportLineRows.removeAt(i)
+                                },
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Quitar línea")
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            transportLineRows.add(TransportLineEditorRow("Otro", ""))
+                        },
+                    ) {
+                        Text("+ Agregar línea de traslado")
+                    }
+                }
                 Text(
-                    "Típico al ingresar en Crudo. En transformaciones se promedia con el peso de cada lote fuente.",
+                    "En transformaciones el costo puesto en planta (material + traslado) se promedia entre lotes fuente.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -502,6 +622,20 @@ private fun ProductEditorDialog(
             Button(
                 onClick = {
                     val q = qty.toDoubleOrNull() ?: 1.0
+                    val transportDrafts: List<AcquisitionTransportLineDraft> =
+                        if (storageLocation == PoleStorageLocation.EN_PROVEEDOR) {
+                            transportLineRows.mapNotNull { r ->
+                                val c = r.costText.toDoubleOrNull() ?: return@mapNotNull null
+                                if (c <= 1e-12) return@mapNotNull null
+                                AcquisitionTransportLineDraft(
+                                    label = r.label.trim().ifBlank { "Traslado" },
+                                    lineCost = c,
+                                    notes = null,
+                                )
+                            }
+                        } else {
+                            emptyList()
+                        }
                     onSave(
                         ProductDraft(
                             id = initial?.id,
@@ -515,6 +649,8 @@ private fun ProductEditorDialog(
                             standardSalePrice = standardPrice.toDoubleOrNull(),
                             failedSalePrice = failedPrice.toDoubleOrNull(),
                             acquisitionCostPerPole = acquisitionCost.toDoubleOrNull(),
+                            acquisitionStorageLocation = storageLocation,
+                            transportLines = transportDrafts,
                         ),
                     )
                 },

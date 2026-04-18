@@ -1,6 +1,8 @@
 package com.inventory.industry.data
 
 import com.inventory.industry.domain.ProductStage
+import java.time.LocalDate
+import kotlin.random.Random
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.insert
@@ -75,6 +77,60 @@ fun seedDefaultResourcesIfEmpty() {
                 it[ResourcesTable.name] = r.name
                 it[ResourcesTable.unit] = r.unit
                 it[ResourcesTable.costPerUnit] = r.costPerUnit
+            }
+        }
+    }
+}
+
+/**
+ * Si no hay partidas de inventario, crea entre 5 y 10 lotes de ejemplo por cada insumo del catálogo
+ * (cantidades, precios de compra y vencimientos variados; reproducibles con RNG por recurso).
+ */
+fun seedDemoResourceStockLotsIfEmpty() {
+    transaction {
+        if (ResourceStockLotsTable.selectAll().count() > 0L) return@transaction
+        val rows =
+            ResourcesTable
+                .selectAll()
+                .map {
+                    Triple(
+                        it[ResourcesTable.id],
+                        it[ResourcesTable.unit],
+                        it[ResourcesTable.costPerUnit],
+                    )
+                }
+        if (rows.isEmpty()) return@transaction
+
+        val today = LocalDate.now()
+        for ((resourceId, unit, catalogCost) in rows) {
+            val rng = Random(resourceId.toLong() * 100_003L + 42L)
+            val lotCount = rng.nextInt(5, 11)
+            repeat(lotCount) { k ->
+                val qty =
+                    when (unit.lowercase()) {
+                        "unidad" -> rng.nextDouble(4.0, 120.0)
+                        "kwh" -> rng.nextDouble(200.0, 8_000.0)
+                        else -> rng.nextDouble(25.0, 4_000.0)
+                    }.coerceAtLeast(0.01)
+                val priceJitter = 0.88 + rng.nextDouble() * 0.28
+                val price = (catalogCost * priceJitter).coerceAtLeast(1.0)
+                val expiresInDays = rng.nextInt(45, 800)
+                val expiry =
+                    if (rng.nextBoolean()) {
+                        today.plusDays(expiresInDays.toLong())
+                    } else {
+                        null
+                    }
+                val acquiredDaysAgo = rng.nextLong(0, 400)
+                val acquiredMs = System.currentTimeMillis() - acquiredDaysAgo * 86_400_000L
+                ResourceStockLotsTable.insert {
+                    it[ResourceStockLotsTable.resourceId] = resourceId
+                    it[ResourceStockLotsTable.quantity] = (qty * 100).toInt() / 100.0
+                    it[ResourceStockLotsTable.acquisitionPricePerUnit] = (price * 100).toInt() / 100.0
+                    it[ResourceStockLotsTable.expirationDate] = expiry?.toString()
+                    it[ResourceStockLotsTable.acquiredAtEpochMs] = acquiredMs
+                    it[ResourceStockLotsTable.notes] = "Demo · partida ${k + 1}/$lotCount"
+                }
             }
         }
     }

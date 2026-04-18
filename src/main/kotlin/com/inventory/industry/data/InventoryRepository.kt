@@ -1,5 +1,6 @@
 package com.inventory.industry.data
 
+import com.inventory.industry.domain.PoleStorageLocation
 import com.inventory.industry.domain.ProductStage
 import java.time.Instant
 import java.time.LocalDate
@@ -21,6 +22,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.sum
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
+import kotlin.comparisons.compareBy
 
 class InventoryRepository {
     fun listCatalogProducts(): List<CatalogProduct> =
@@ -311,16 +313,22 @@ class InventoryRepository {
 
             val unitPrice = if (quantitySold > 0) totalAmount / quantitySold else null
 
-            val acqPer = prow[ProductsTable.acquisitionCostPerPole]
+            val materialPer = prow[ProductsTable.acquisitionCostPerPole] ?: 0.0
+            val transportTotalOnLot = transportCostSumForProduct(productId)
+            val transportPerPole =
+                if (qtyAvail > 1e-12) transportTotalOnLot / qtyAvail else 0.0
+            val landedPerPole = materialPer + transportPerPole
             val procTotalOnLot =
                 ProcessCostsTable
                     .selectAll()
                     .where { ProcessCostsTable.productId eq productId }
                     .sumOf { it[ProcessCostsTable.lineCost] }
             val procPerPole = if (qtyAvail > 1e-12) procTotalOnLot / qtyAvail else 0.0
-            val acqPortion = quantitySold * (acqPer ?: 0.0)
+            val materialPortion = quantitySold * materialPer
+            val transportPortion = quantitySold * transportPerPole
+            val acqPortion = materialPortion + transportPortion
             val procPortion = quantitySold * procPerPole
-            val unitBasis = (acqPer ?: 0.0) + procPerPole
+            val unitBasis = landedPerPole + procPerPole
             val suggestedTotal =
                 marginPercentForEstimate?.let { m ->
                     quantitySold * unitBasis * (1.0 + m / 100.0)
@@ -341,6 +349,8 @@ class InventoryRepository {
                     it[SalesTable.snapshotWasFailed] = isFailed
                     it[SalesTable.snapshotProviderName] = provName
                     it[SalesTable.snapshotAcquisitionCostTotal] = acqPortion
+                    it[SalesTable.snapshotAcquisitionMaterialTotal] = materialPortion
+                    it[SalesTable.snapshotAcquisitionTransportTotal] = transportPortion
                     it[SalesTable.snapshotProcessingCostTotal] = procPortion
                     it[SalesTable.snapshotUnitCostBasis] = unitBasis
                     it[SalesTable.snapshotMarginPercent] = marginPercentForEstimate
@@ -445,6 +455,7 @@ class InventoryRepository {
         standardSalePrice: Double?,
         failedSalePrice: Double?,
         acquisitionCostPerPole: Double?,
+        acquisitionStorageLocation: PoleStorageLocation = PoleStorageLocation.FABRICA,
     ): Int =
         transaction {
             val now = System.currentTimeMillis()
@@ -463,6 +474,7 @@ class InventoryRepository {
                     it[ProductsTable.standardSalePrice] = standardSalePrice
                     it[ProductsTable.failedSalePrice] = failedSalePrice
                     it[ProductsTable.acquisitionCostPerPole] = acquisitionCostPerPole
+                    it[ProductsTable.acquisitionStorageLocation] = acquisitionStorageLocation.name
                 }[ProductsTable.id]
             } else {
                 ProductsTable.update({ ProductsTable.id eq id }) {
@@ -476,10 +488,53 @@ class InventoryRepository {
                     it[ProductsTable.standardSalePrice] = standardSalePrice
                     it[ProductsTable.failedSalePrice] = failedSalePrice
                     it[ProductsTable.acquisitionCostPerPole] = acquisitionCostPerPole
+                    it[ProductsTable.acquisitionStorageLocation] = acquisitionStorageLocation.name
                 }
                 id
             }
         }
+
+    fun listAcquisitionTransportForProduct(productId: Int): List<AcquisitionTransportLine> =
+        transaction {
+            AcquisitionTransportCostsTable
+                .selectAll()
+                .where { AcquisitionTransportCostsTable.productId eq productId }
+                .orderBy(AcquisitionTransportCostsTable.id to SortOrder.ASC)
+                .map { it.toAcquisitionTransportLine() }
+        }
+
+    /**
+     * Reemplaza las líneas de traslado del lote. Si [location] es [PoleStorageLocation.FABRICA], sólo borra.
+     */
+    fun syncAcquisitionTransportCosts(
+        productId: Int,
+        location: PoleStorageLocation,
+        lines: List<AcquisitionTransportLineDraft>,
+    ) {
+        transaction {
+            AcquisitionTransportCostsTable.deleteWhere {
+                AcquisitionTransportCostsTable.productId eq productId
+            }
+            if (location != PoleStorageLocation.EN_PROVEEDOR) return@transaction
+            val now = System.currentTimeMillis()
+            lines
+                .map { d ->
+                    val c = d.lineCost.coerceAtLeast(0.0)
+                    val lbl = d.label.trim().ifBlank { "Traslado" }
+                    Triple(lbl, c, d.notes)
+                }
+                .filter { (_, c, _) -> c > 1e-12 }
+                .forEach { (lbl, c, n) ->
+                    AcquisitionTransportCostsTable.insert {
+                        it[AcquisitionTransportCostsTable.productId] = productId
+                        it[AcquisitionTransportCostsTable.label] = lbl
+                        it[AcquisitionTransportCostsTable.lineCost] = c
+                        it[AcquisitionTransportCostsTable.notes] = n
+                        it[AcquisitionTransportCostsTable.createdAtEpochMs] = now
+                    }
+                }
+        }
+    }
 
     fun deleteProduct(id: Int) {
         transaction {
@@ -508,12 +563,44 @@ class InventoryRepository {
                     .firstOrNull()
                     ?.getOrNull(openExpr)
                     ?: 0.0
+            val transportSumsByProductId =
+                AcquisitionTransportCostsTable
+                    .selectAll()
+                    .where { AcquisitionTransportCostsTable.productId.isNotNull() }
+                    .groupBy { it[AcquisitionTransportCostsTable.productId]!! }
+                    .mapValues { (_, rows) ->
+                        rows.sumOf { it[AcquisitionTransportCostsTable.lineCost] }
+                    }
             val invAcq =
                 ProductsTable
                     .selectAll()
                     .sumOf { r ->
-                        r[ProductsTable.quantity] * (r[ProductsTable.acquisitionCostPerPole] ?: 0.0)
+                        val pid = r[ProductsTable.id]
+                        val q = r[ProductsTable.quantity]
+                        val t = transportSumsByProductId[pid] ?: 0.0
+                        val land =
+                            landedAcquisitionPerPole(
+                                r[ProductsTable.acquisitionCostPerPole],
+                                q,
+                                t,
+                            )
+                        q * land
                     }
+            val trAllExpr = AcquisitionTransportCostsTable.lineCost.sum()
+            val trAllTime =
+                AcquisitionTransportCostsTable
+                    .select(trAllExpr)
+                    .firstOrNull()
+                    ?.getOrNull(trAllExpr)
+                    ?: 0.0
+            val trOpenExpr = AcquisitionTransportCostsTable.lineCost.sum()
+            val trOnOpen =
+                AcquisitionTransportCostsTable
+                    .select(trOpenExpr)
+                    .where { AcquisitionTransportCostsTable.productId.isNotNull() }
+                    .firstOrNull()
+                    ?.getOrNull(trOpenExpr)
+                    ?: 0.0
             val soldAcqExpr = SalesTable.snapshotAcquisitionCostTotal.sum()
             val soldAcq =
                 SalesTable
@@ -528,12 +615,22 @@ class InventoryRepository {
                     .firstOrNull()
                     ?.getOrNull(soldProcExpr)
                     ?: 0.0
+            val soldTrExpr = SalesTable.snapshotAcquisitionTransportTotal.sum()
+            val soldTr =
+                SalesTable
+                    .select(soldTrExpr)
+                    .firstOrNull()
+                    ?.getOrNull(soldTrExpr)
+                    ?: 0.0
             AccountingCostOverview(
                 totalProcessingCostAllTime = allTime,
                 processingCostAttributedToOpenStock = onOpen,
                 inventoryAcquisitionCostTotal = invAcq,
                 soldAcquisitionCostTotal = soldAcq,
                 soldProcessingCostTotal = soldProc,
+                totalAcquisitionTransportAllTime = trAllTime,
+                acquisitionTransportAttributedToOpenStock = trOnOpen,
+                soldAcquisitionTransportTotal = soldTr,
             )
         }
 
@@ -562,22 +659,33 @@ class InventoryRepository {
                     .singleOrNull() ?: return@transaction null
             val qtyAvail = row[ProductsTable.quantity]
             if (quantitySold <= 1e-12 || qtyAvail <= 1e-12) return@transaction null
-            val acq = row[ProductsTable.acquisitionCostPerPole]
+            val materialPer = row[ProductsTable.acquisitionCostPerPole]
+            val transportTotal = transportCostSumForProduct(productId)
+            val transportPerPole =
+                if (qtyAvail > 1e-12) transportTotal / qtyAvail else 0.0
+            val landedPerPole =
+                landedAcquisitionPerPole(materialPer, qtyAvail, transportTotal)
             val procTotal =
                 ProcessCostsTable
                     .selectAll()
                     .where { ProcessCostsTable.productId eq productId }
                     .sumOf { it[ProcessCostsTable.lineCost] }
             val procPerPole = procTotal / qtyAvail
-            val unitBasis = (acq ?: 0.0) + procPerPole
+            val unitBasis = landedPerPole + procPerPole
             val sugUnit = unitBasis * (1.0 + marginPercent / 100.0)
+            val matPortion = quantitySold * (materialPer ?: 0.0)
+            val trPortion = quantitySold * transportPerPole
             SaleCostPreview(
                 quantityAvailable = qtyAvail,
-                acquisitionCostPerPole = acq,
+                acquisitionMaterialPerPole = materialPer,
+                acquisitionTransportPerPole = transportPerPole,
+                landedAcquisitionPerPole = landedPerPole,
                 processingCostTotalOnLot = procTotal,
                 processingCostPerPole = procPerPole,
                 unitCostBasis = unitBasis,
-                acquisitionTotalForSaleQty = quantitySold * (acq ?: 0.0),
+                acquisitionMaterialTotalForSaleQty = matPortion,
+                acquisitionTransportTotalForSaleQty = trPortion,
+                acquisitionTotalForSaleQty = matPortion + trPortion,
                 processingTotalForSaleQty = quantitySold * procPerPole,
                 suggestedUnitPrice = sugUnit,
                 suggestedTotal = quantitySold * sugUnit,
@@ -682,6 +790,65 @@ class InventoryRepository {
             ResourcesTable.deleteWhere { ResourcesTable.id eq id }
         }
     }
+
+    /** Partidas de inventario por insumo (cantidad, precio de compra, vencimiento). */
+    fun listResourceStockLots(): List<ResourceStockLot> =
+        transaction {
+            (ResourceStockLotsTable innerJoin ResourcesTable)
+                .selectAll()
+                .map { it.toResourceStockLot() }
+        }.sortedWith(
+            compareBy<ResourceStockLot> { it.expirationDate ?: LocalDate.MAX }
+                .thenByDescending { it.id },
+        )
+
+    fun upsertResourceStockLot(
+        id: Int?,
+        resourceId: Int,
+        quantity: Double,
+        acquisitionPricePerUnit: Double,
+        expirationDate: LocalDate?,
+        notes: String?,
+    ): Int =
+        transaction {
+            val now = System.currentTimeMillis()
+            val expStr = expirationDate?.toString()
+            if (id == null) {
+                ResourceStockLotsTable.insert {
+                    it[ResourceStockLotsTable.resourceId] = resourceId
+                    it[ResourceStockLotsTable.quantity] = quantity
+                    it[ResourceStockLotsTable.acquisitionPricePerUnit] = acquisitionPricePerUnit
+                    it[ResourceStockLotsTable.expirationDate] = expStr
+                    it[ResourceStockLotsTable.acquiredAtEpochMs] = now
+                    it[ResourceStockLotsTable.notes] = notes
+                }[ResourceStockLotsTable.id]
+            } else {
+                ResourceStockLotsTable.update({ ResourceStockLotsTable.id eq id }) {
+                    it[ResourceStockLotsTable.resourceId] = resourceId
+                    it[ResourceStockLotsTable.quantity] = quantity
+                    it[ResourceStockLotsTable.acquisitionPricePerUnit] = acquisitionPricePerUnit
+                    it[ResourceStockLotsTable.expirationDate] = expStr
+                    it[ResourceStockLotsTable.notes] = notes
+                }
+                id
+            }
+        }
+
+    fun deleteResourceStockLot(id: Int) {
+        transaction {
+            ResourceStockLotsTable.deleteWhere { ResourceStockLotsTable.id eq id }
+        }
+    }
+
+    /** Valor estimado del inventario de insumos (cantidad × precio de compra por partida). */
+    fun resourceStockTotalValueEstimate(): Double =
+        transaction {
+            (ResourceStockLotsTable innerJoin ResourcesTable)
+                .selectAll()
+                .sumOf { row ->
+                    row[ResourceStockLotsTable.quantity] * row[ResourceStockLotsTable.acquisitionPricePerUnit]
+                }
+        }
 
     fun listStageResourceTemplates(fromStage: ProductStage): List<StageResourceTemplate> =
         transaction {
@@ -907,7 +1074,16 @@ class InventoryRepository {
             val inheritedFailedPrice = first[ProductsTable.failedSalePrice]
             val acqNumerator =
                 sources.sumOf { (row, takeQty) ->
-                    takeQty * (row[ProductsTable.acquisitionCostPerPole] ?: 0.0)
+                    val sid = row[ProductsTable.id]
+                    val tSum = transportCostSumForProduct(sid)
+                    val qLot = row[ProductsTable.quantity]
+                    val landed =
+                        landedAcquisitionPerPole(
+                            row[ProductsTable.acquisitionCostPerPole],
+                            qLot,
+                            tSum,
+                        )
+                    takeQty * landed
                 }
             val blendedAcq: Double? =
                 if (totalInput > 1e-12 && acqNumerator > 1e-12) acqNumerator / totalInput else null
@@ -952,6 +1128,7 @@ class InventoryRepository {
                         it[ProductsTable.standardSalePrice] = inheritedStandardPrice
                         it[ProductsTable.failedSalePrice] = inheritedFailedPrice
                         it[ProductsTable.acquisitionCostPerPole] = blendedAcq
+                        it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.FABRICA.name
                     }[ProductsTable.id]
             }
 
@@ -972,6 +1149,7 @@ class InventoryRepository {
                         it[ProductsTable.standardSalePrice] = inheritedStandardPrice
                         it[ProductsTable.failedSalePrice] = inheritedFailedPrice
                         it[ProductsTable.acquisitionCostPerPole] = blendedAcq
+                        it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.FABRICA.name
                     }[ProductsTable.id]
             }
 
@@ -1113,6 +1291,27 @@ class InventoryRepository {
             n > 0
         }
 
+    private fun ResultRow.toResourceStockLot(): ResourceStockLot {
+        val expRaw = this[ResourceStockLotsTable.expirationDate]
+        val exp =
+            try {
+                expRaw?.let { LocalDate.parse(it) }
+            } catch (_: Exception) {
+                null
+            }
+        return ResourceStockLot(
+            id = this[ResourceStockLotsTable.id],
+            resourceId = this[ResourceStockLotsTable.resourceId],
+            resourceName = this[ResourcesTable.name],
+            resourceUnit = this[ResourcesTable.unit],
+            quantity = this[ResourceStockLotsTable.quantity],
+            acquisitionPricePerUnit = this[ResourceStockLotsTable.acquisitionPricePerUnit],
+            expirationDate = exp,
+            acquiredAtEpochMs = this[ResourceStockLotsTable.acquiredAtEpochMs],
+            notes = this[ResourceStockLotsTable.notes],
+        )
+    }
+
     private fun ResultRow.toProcessCostLine(): ProcessCostLine =
         ProcessCostLine(
             id = this[ProcessCostsTable.id],
@@ -1146,6 +1345,8 @@ class InventoryRepository {
             standardSalePrice = this[ProductsTable.standardSalePrice],
             failedSalePrice = this[ProductsTable.failedSalePrice],
             acquisitionCostPerPole = this[ProductsTable.acquisitionCostPerPole],
+            acquisitionStorageLocation =
+                PoleStorageLocation.fromDb(this[ProductsTable.acquisitionStorageLocation]),
         )
     }
 
@@ -1166,9 +1367,37 @@ class InventoryRepository {
             snapshotWasFailed = this[SalesTable.snapshotWasFailed],
             snapshotProviderName = this[SalesTable.snapshotProviderName],
             snapshotAcquisitionCostTotal = this[SalesTable.snapshotAcquisitionCostTotal],
+            snapshotAcquisitionMaterialTotal = this[SalesTable.snapshotAcquisitionMaterialTotal],
+            snapshotAcquisitionTransportTotal = this[SalesTable.snapshotAcquisitionTransportTotal],
             snapshotProcessingCostTotal = this[SalesTable.snapshotProcessingCostTotal],
             snapshotUnitCostBasis = this[SalesTable.snapshotUnitCostBasis],
             snapshotMarginPercent = this[SalesTable.snapshotMarginPercent],
             snapshotSuggestedTotal = this[SalesTable.snapshotSuggestedTotal],
+        )
+
+    private fun transportCostSumForProduct(productId: Int): Double =
+        AcquisitionTransportCostsTable
+            .selectAll()
+            .where { AcquisitionTransportCostsTable.productId eq productId }
+            .sumOf { it[AcquisitionTransportCostsTable.lineCost] }
+
+    private fun landedAcquisitionPerPole(
+        materialPerPole: Double?,
+        lotQuantity: Double,
+        transportTotalForLot: Double,
+    ): Double {
+        val m = materialPerPole ?: 0.0
+        val t = if (lotQuantity > 1e-12) transportTotalForLot / lotQuantity else 0.0
+        return m + t
+    }
+
+    private fun ResultRow.toAcquisitionTransportLine(): AcquisitionTransportLine =
+        AcquisitionTransportLine(
+            id = this[AcquisitionTransportCostsTable.id],
+            productId = this[AcquisitionTransportCostsTable.productId],
+            label = this[AcquisitionTransportCostsTable.label],
+            lineCost = this[AcquisitionTransportCostsTable.lineCost],
+            notes = this[AcquisitionTransportCostsTable.notes],
+            createdAtEpochMs = this[AcquisitionTransportCostsTable.createdAtEpochMs],
         )
 }

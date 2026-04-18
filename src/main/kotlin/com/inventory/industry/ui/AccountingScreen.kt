@@ -101,14 +101,23 @@ fun AccountingScreen(repo: InventoryRepository) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "Valor de adquisición en inventario (cantidad × costo/poste): " +
+                        "Valor de adquisición en inventario (material + traslado prorrateado por poste): " +
                             formatMoney(o.inventoryAcquisitionCostTotal),
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Traslado desde proveedor (histórico, todas las líneas): " +
+                            formatMoney(o.totalAcquisitionTransportAllTime) +
+                            " · aún en stock: " +
+                            formatMoney(o.acquisitionTransportAttributedToOpenStock),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     HorizontalDivider()
                     Text(
                         "En ventas ya registradas — adquisición imputada: " +
                             formatMoney(o.soldAcquisitionCostTotal) +
+                            " (traslado " + formatMoney(o.soldAcquisitionTransportTotal) + ")" +
                             " · proceso imputado: " +
                             formatMoney(o.soldProcessingCostTotal),
                         style = MaterialTheme.typography.bodySmall,

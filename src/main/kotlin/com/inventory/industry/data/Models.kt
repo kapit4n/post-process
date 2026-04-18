@@ -1,6 +1,8 @@
 package com.inventory.industry.data
 
+import com.inventory.industry.domain.PoleStorageLocation
 import com.inventory.industry.domain.ProductStage
+import java.time.LocalDate
 
 data class CatalogProduct(
     val id: Int,
@@ -44,6 +46,8 @@ data class Product(
     val failedSalePrice: Double?,
     /** Costo de adquisición por poste (materia prima), si se registró. */
     val acquisitionCostPerPole: Double?,
+    /** Ubicación al registrar el lote (afecta si se usan líneas de traslado). */
+    val acquisitionStorageLocation: PoleStorageLocation,
 ) {
     /** Precio de venta aplicable (los fallados usan el precio de saldo). */
     fun effectiveSalePrice(): Double? =
@@ -62,12 +66,44 @@ data class Product(
 fun Product.isSellable(): Boolean =
     (stage == ProductStage.TERMINADO && !isFailed) || isFailed
 
+/** Línea editable de traslado al guardar un lote. */
+data class AcquisitionTransportLineDraft(
+    val label: String,
+    val lineCost: Double,
+    val notes: String? = null,
+)
+
+/** Línea persistida de costo de traslado (camión, cargador…). */
+data class AcquisitionTransportLine(
+    val id: Int,
+    val productId: Int?,
+    val label: String,
+    val lineCost: Double,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+)
+
 data class Resource(
     val id: Int,
     val name: String,
     val unit: String,
     val costPerUnit: Double,
 )
+
+/** Partida de stock de un insumo (compra / lote con vencimiento). */
+data class ResourceStockLot(
+    val id: Int,
+    val resourceId: Int,
+    val resourceName: String,
+    val resourceUnit: String,
+    val quantity: Double,
+    val acquisitionPricePerUnit: Double,
+    val expirationDate: LocalDate?,
+    val acquiredAtEpochMs: Long,
+    val notes: String?,
+) {
+    val lineValueEstimate: Double get() = quantity * acquisitionPricePerUnit
+}
 
 /** Línea de receta editable: insumo esperado por poste al salir de [fromStage]. */
 data class StageResourceTemplate(
@@ -159,6 +195,8 @@ data class SaleRecord(
     val snapshotWasFailed: Boolean,
     val snapshotProviderName: String?,
     val snapshotAcquisitionCostTotal: Double,
+    val snapshotAcquisitionMaterialTotal: Double,
+    val snapshotAcquisitionTransportTotal: Double,
     val snapshotProcessingCostTotal: Double,
     val snapshotUnitCostBasis: Double?,
     val snapshotMarginPercent: Double?,
@@ -168,10 +206,17 @@ data class SaleRecord(
 /** Vista previa de costos para una venta (antes de confirmar). */
 data class SaleCostPreview(
     val quantityAvailable: Double,
-    val acquisitionCostPerPole: Double?,
+    /** Solo materia prima / precio al proveedor por poste. */
+    val acquisitionMaterialPerPole: Double?,
+    /** Traslado prorrateado por poste (total traslado del lote ÷ cantidad en lote). */
+    val acquisitionTransportPerPole: Double,
+    /** Materia prima + traslado por poste (antes de proceso). */
+    val landedAcquisitionPerPole: Double,
     val processingCostTotalOnLot: Double,
     val processingCostPerPole: Double,
     val unitCostBasis: Double,
+    val acquisitionMaterialTotalForSaleQty: Double,
+    val acquisitionTransportTotalForSaleQty: Double,
     val acquisitionTotalForSaleQty: Double,
     val processingTotalForSaleQty: Double,
     val suggestedUnitPrice: Double,
@@ -190,6 +235,12 @@ data class AccountingCostOverview(
     val soldAcquisitionCostTotal: Double,
     /** Costo de procesamiento imputado en ventas registradas (snapshots). */
     val soldProcessingCostTotal: Double,
+    /** Traslado registrado (histórico, todas las líneas). */
+    val totalAcquisitionTransportAllTime: Double,
+    /** Traslado vinculado a lotes aún en inventario. */
+    val acquisitionTransportAttributedToOpenStock: Double,
+    /** Traslado imputado en ventas (snapshots). */
+    val soldAcquisitionTransportTotal: Double,
 )
 
 /** Bucket para reportes diario / mensual / anual. */

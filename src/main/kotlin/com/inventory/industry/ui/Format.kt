@@ -31,6 +31,35 @@ fun formatQty(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else
 
 fun formatMoney(v: Double): String = "%.2f".format(v)
 
+/**
+ * Monto desde el campo de texto (acepta "1234.56", "1234,56", "1.234,56", "1,234.56").
+ */
+fun parseMoneyAmount(input: String): Double? {
+    var t = input.trim().replace('\u00A0', ' ').replace(" ", "")
+    if (t.isEmpty()) return null
+    val lastComma = t.lastIndexOf(',')
+    val lastDot = t.lastIndexOf('.')
+    t =
+        when {
+            lastComma >= 0 && lastDot >= 0 ->
+                if (lastComma > lastDot) {
+                    t.replace(".", "").replace(',', '.')
+                } else {
+                    t.replace(",", "")
+                }
+            lastComma >= 0 -> t.replace(',', '.')
+            else -> t
+        }
+    return t.toDoubleOrNull()
+}
+
+/** % de ganancia desde el campo de texto (acepta "20", "20%", "20,5"). */
+fun parseMarginPercent(input: String): Double? {
+    val t = input.trim().removeSuffix("%").trim().replace(',', '.')
+    if (t.isEmpty()) return null
+    return t.toDoubleOrNull()
+}
+
 private val ISO_DATE: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
 /** Fecha local → yyyy-MM-dd */

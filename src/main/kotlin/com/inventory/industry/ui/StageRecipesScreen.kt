@@ -19,7 +19,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -239,16 +238,14 @@ private fun RecipeLineEditorDialog(
                     )
                 } else {
                     Text("Insumo", style = MaterialTheme.typography.labelLarge)
-                    val current = resources.firstOrNull { it.id == resourceId } ?: resources.first()
-                    OutlinedButton(
-                        onClick = {
-                            val idx = resources.indexOfFirst { it.id == resourceId }.let { if (it < 0) 0 else it }
-                            resourceId = resources[(idx + 1) % resources.size].id
-                        },
+                    CycleOrDropdownPicker(
+                        items = resources,
+                        selected = resources.firstOrNull { it.id == resourceId },
+                        onSelected = { resourceId = it.id },
+                        labelFor = { "${it.name} (${it.unit})" },
+                        placeholder = "Elegir insumo…",
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("${current.name} (${current.unit})")
-                    }
+                    )
                 }
                 TextField(
                     value = perPole,

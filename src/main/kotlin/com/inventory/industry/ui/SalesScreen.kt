@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +51,9 @@ fun SalesScreen(repo: InventoryRepository) {
     var saleNotes by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var costPreview by remember { mutableStateOf<SaleCostPreview?>(null) }
+    var showSaleConfirmDialog by remember { mutableStateOf(false) }
+    /** Bumped after a successful sale so cantidad/total refresh even if the same lot remains. */
+    var formResetNonce by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
 
     fun reloadLists() {
@@ -71,10 +76,16 @@ fun SalesScreen(repo: InventoryRepository) {
         if (productId == null && sellable.isNotEmpty()) productId = sellable.first().id
     }
 
+    LaunchedEffect(sellable, productId) {
+        if (productId != null && sellable.none { it.id == productId }) {
+            productId = sellable.firstOrNull()?.id
+        }
+    }
+
     val selectedClient = clients.firstOrNull { it.id == clientId }
     val selectedProduct = sellable.firstOrNull { it.id == productId }
 
-    LaunchedEffect(selectedProduct?.id) {
+    LaunchedEffect(selectedProduct?.id, formResetNonce) {
         val p = selectedProduct ?: return@LaunchedEffect
         qtyText = formatQty(p.quantity)
         val hint = p.effectiveSalePrice()
@@ -89,7 +100,7 @@ fun SalesScreen(repo: InventoryRepository) {
     LaunchedEffect(selectedProduct?.id, qtyText, marginText) {
         val p = selectedProduct
         val q = qtyText.toDoubleOrNull()
-        val m = marginText.toDoubleOrNull()
+        val m = parseMarginPercent(marginText)
         if (p == null || q == null || m == null || q <= 1e-12) {
             costPreview = null
             return@LaunchedEffect
@@ -99,6 +110,26 @@ fun SalesScreen(repo: InventoryRepository) {
                 repo.saleCostPreview(productId = p.id, quantitySold = q, marginPercent = m)
             }
     }
+
+    val qtyParsed = qtyText.toDoubleOrNull()
+    val totalParsed = parseMoneyAmount(totalText)
+    val whenParsed = parseDateTime(whenText)
+    val marginParsed = parseMarginPercent(marginText)
+    val canSubmitSale =
+        clients.isNotEmpty() &&
+            sellable.isNotEmpty() &&
+            clientId != null &&
+            clients.any { it.id == clientId } &&
+            productId != null &&
+            sellable.any { it.id == productId } &&
+            qtyParsed != null &&
+            qtyParsed > 1e-12 &&
+            selectedProduct != null &&
+            qtyParsed <= selectedProduct.quantity + 1e-9 &&
+            totalParsed != null &&
+            totalParsed >= 0 &&
+            whenParsed != null &&
+            marginParsed != null
 
     Scaffold { padding ->
         Column(
@@ -121,38 +152,28 @@ fun SalesScreen(repo: InventoryRepository) {
             )
 
             Text("Cliente", style = MaterialTheme.typography.labelLarge)
-            OutlinedButton(
-                onClick = {
-                    if (clients.isEmpty()) return@OutlinedButton
-                    val idx = clients.indexOfFirst { it.id == clientId }.let { if (it < 0) 0 else it }
-                    clientId = clients[(idx + 1) % clients.size].id
-                },
-                enabled = clients.isNotEmpty(),
+            CycleOrDropdownPicker(
+                items = clients,
+                selected = selectedClient,
+                onSelected = { clientId = it.id },
+                labelFor = { it.name },
+                placeholder = if (clients.isEmpty()) "Cree clientes primero" else "Elegir cliente…",
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(selectedClient?.name ?: if (clients.isEmpty()) "Cree clientes primero" else "Elegir cliente…")
-            }
+                enabled = clients.isNotEmpty(),
+            )
 
             Text("Lote a vender", style = MaterialTheme.typography.labelLarge)
-            OutlinedButton(
-                onClick = {
-                    if (sellable.isEmpty()) return@OutlinedButton
-                    val idx = sellable.indexOfFirst { it.id == productId }.let { if (it < 0) 0 else it }
-                    productId = sellable[(idx + 1) % sellable.size].id
+            CycleOrDropdownPicker(
+                items = sellable,
+                selected = selectedProduct,
+                onSelected = { productId = it.id },
+                labelFor = { p ->
+                    "${p.name} · ${p.stage.shortCode} · ${if (p.isFailed) "Saldo" else "OK"} · disp. ${formatQty(p.quantity)}"
                 },
-                enabled = sellable.isNotEmpty(),
+                placeholder = if (sellable.isEmpty()) "No hay lotes vendibles" else "Elegir lote…",
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    selectedProduct?.let { p ->
-                        "${p.name} · ${p.stage.shortCode} · ${if (p.isFailed) "Saldo" else "OK"} · disp. ${formatQty(p.quantity)}"
-                    } ?: if (sellable.isEmpty()) {
-                        "No hay lotes vendibles"
-                    } else {
-                        "Elegir lote…"
-                    },
-                )
-            }
+                enabled = sellable.isNotEmpty(),
+            )
 
             selectedProduct?.let { p ->
                 Text(
@@ -185,10 +206,27 @@ fun SalesScreen(repo: InventoryRepository) {
                 )
                 OutlinedButton(
                     onClick = {
-                        val prev = costPreview ?: return@OutlinedButton
-                        totalText = formatMoney(prev.suggestedTotal)
+                        val p = selectedProduct ?: return@OutlinedButton
+                        val q = qtyText.toDoubleOrNull() ?: return@OutlinedButton
+                        val m = parseMarginPercent(marginText) ?: return@OutlinedButton
+                        scope.launch {
+                            val preview =
+                                withContext(Dispatchers.IO) {
+                                    repo.saleCostPreview(
+                                        productId = p.id,
+                                        quantitySold = q,
+                                        marginPercent = m,
+                                    )
+                                }
+                            if (preview != null) {
+                                totalText = formatMoney(preview.suggestedTotal)
+                            }
+                        }
                     },
-                    enabled = costPreview != null,
+                    enabled =
+                        selectedProduct != null &&
+                            qtyText.toDoubleOrNull()?.let { it > 1e-12 } == true &&
+                            parseMarginPercent(marginText) != null,
                     modifier = Modifier.weight(1f),
                 ) {
                     Text("Usar sugerido")
@@ -237,52 +275,110 @@ fun SalesScreen(repo: InventoryRepository) {
 
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
+            if (showSaleConfirmDialog) {
+                val p = selectedProduct
+                val c = selectedClient
+                AlertDialog(
+                    onDismissRequest = { showSaleConfirmDialog = false },
+                    title = { Text("¿Registrar esta venta?") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Revise los datos antes de confirmar.", style = MaterialTheme.typography.bodyMedium)
+                            HorizontalDivider()
+                            Text("Cliente: ${c?.name ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                            if (p != null) {
+                                Text(
+                                    "Lote: ${p.name} · ${p.stage.shortCode} · " +
+                                        "${if (p.isFailed) "Saldo" else "OK"} · disp. ${formatQty(p.quantity)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Text(
+                                "Cantidad: ${qtyParsed?.let { formatQty(it) } ?: "—"} postes",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                "Total cobrado: ${totalParsed?.let { formatMoney(it) } ?: "—"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                "Fecha / hora: ${whenText.trim()}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text("% ganancia (estim.): ${marginText.trim()}", style = MaterialTheme.typography.bodySmall)
+                            if (saleNotes.isNotBlank()) {
+                                Text("Notas: ${saleNotes.trim()}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showSaleConfirmDialog = false
+                                error = null
+                                val cid = clientId ?: return@TextButton
+                                val pid = productId ?: return@TextButton
+                                val q = qtyParsed ?: return@TextButton
+                                val total = totalParsed ?: return@TextButton
+                                val whenMs = whenParsed ?: return@TextButton
+                                val margin = marginParsed ?: return@TextButton
+                                scope.launch {
+                                    val result =
+                                        withContext(Dispatchers.IO) {
+                                            repo.recordSale(
+                                                productId = pid,
+                                                clientId = cid,
+                                                quantitySold = q,
+                                                totalAmount = total,
+                                                soldAtEpochMs = whenMs,
+                                                notes = saleNotes.trim().ifBlank { null },
+                                                marginPercentForEstimate = margin,
+                                            )
+                                        }
+                                    when (result) {
+                                        is InventoryRepository.SaleRecordingResult.Ok -> {
+                                            clients =
+                                                withContext(Dispatchers.IO) { repo.listClients() }
+                                            sellable =
+                                                withContext(Dispatchers.IO) { repo.listSellableProducts() }
+                                            recent =
+                                                withContext(Dispatchers.IO) { repo.listSales(80) }
+                                            if (productId != null &&
+                                                sellable.none { it.id == productId }
+                                            ) {
+                                                productId = sellable.firstOrNull()?.id
+                                            }
+                                            saleNotes = ""
+                                            whenText =
+                                                formatEpochMs(System.currentTimeMillis())
+                                            marginText = "20"
+                                            error = null
+                                            formResetNonce++
+                                        }
+                                        is InventoryRepository.SaleRecordingResult.Err -> error = result.message
+                                    }
+                                }
+                            },
+                        ) {
+                            Text("Registrar venta")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSaleConfirmDialog = false }) {
+                            Text("Cancelar")
+                        }
+                    },
+                )
+            }
+
             Button(
                 onClick = {
                     error = null
-                    val cid = clientId ?: run {
-                        error = "Seleccione un cliente."
-                        return@Button
-                    }
-                    val pid = productId ?: run {
-                        error = "Seleccione un lote."
-                        return@Button
-                    }
-                    val q = qtyText.toDoubleOrNull() ?: run {
-                        error = "Cantidad inválida."
-                        return@Button
-                    }
-                    val total = totalText.toDoubleOrNull() ?: run {
-                        error = "Monto total inválido."
-                        return@Button
-                    }
-                    val whenMs = parseDateTime(whenText) ?: run {
-                        error = "Fecha u hora inválida."
-                        return@Button
-                    }
-                    scope.launch {
-                        val result =
-                            withContext(Dispatchers.IO) {
-                                repo.recordSale(
-                                    productId = pid,
-                                    clientId = cid,
-                                    quantitySold = q,
-                                    totalAmount = total,
-                                    soldAtEpochMs = whenMs,
-                                    notes = saleNotes.trim().ifBlank { null },
-                                    marginPercentForEstimate = marginText.toDoubleOrNull(),
-                                )
-                            }
-                        when (result) {
-                            is InventoryRepository.SaleRecordingResult.Ok -> {
-                                saleNotes = ""
-                                reloadLists()
-                            }
-                            is InventoryRepository.SaleRecordingResult.Err -> error = result.message
-                        }
-                    }
+                    if (!canSubmitSale) return@Button
+                    showSaleConfirmDialog = true
                 },
-                enabled = clients.isNotEmpty() && sellable.isNotEmpty(),
+                enabled = canSubmitSale,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Confirmar venta")

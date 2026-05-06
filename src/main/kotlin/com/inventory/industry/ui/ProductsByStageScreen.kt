@@ -457,7 +457,7 @@ private fun ProductEditorDialog(
                 if (catalog.isNotEmpty()) {
                     Text("Desde el catálogo", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CatalogPicker(
+                        CatalogPickerRow(
                             catalog = catalog,
                             selectedId = catalogProductId,
                             onSelect = { id, item ->
@@ -467,6 +467,7 @@ private fun ProductEditorDialog(
                                     line = item.productLine
                                 }
                             },
+                            modifier = Modifier.weight(1f),
                         )
                         TextButton(
                             onClick = {
@@ -490,19 +491,14 @@ private fun ProductEditorDialog(
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val currentProv = providers.firstOrNull { it.id == providerId }
-                        OutlinedButton(
-                            onClick = {
-                                if (providers.isEmpty()) return@OutlinedButton
-                                val idx =
-                                    providers.indexOfFirst { it.id == providerId }.let {
-                                        if (it < 0) 0 else it
-                                    }
-                                providerId = providers[(idx + 1) % providers.size].id
-                            },
+                        CycleOrDropdownPicker(
+                            items = providers,
+                            selected = currentProv,
+                            onSelected = { providerId = it.id },
+                            labelFor = { it.name },
+                            placeholder = "Elegir proveedor…",
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Text(currentProv?.name ?: "Elegir proveedor…")
-                        }
+                        )
                         TextButton(onClick = { providerId = null }) {
                             Text("Quitar")
                         }
@@ -665,23 +661,22 @@ private fun ProductEditorDialog(
 }
 
 @Composable
-private fun RowScope.CatalogPicker(
+private fun CatalogPickerRow(
     catalog: List<CatalogProduct>,
     selectedId: Int?,
     onSelect: (Int?, CatalogProduct?) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    if (catalog.isEmpty()) return
     val current = catalog.firstOrNull { it.id == selectedId }
-    OutlinedButton(
-        onClick = {
-            if (catalog.isEmpty()) return@OutlinedButton
-            val idx = catalog.indexOfFirst { it.id == selectedId }.let { if (it < 0) 0 else it }
-            val next = catalog[(idx + 1) % catalog.size]
-            onSelect(next.id, next)
-        },
-        modifier = Modifier.weight(1f),
-    ) {
-        Text(current?.let { "${it.name} · ${it.productLine}" } ?: "Elegir del catálogo…")
-    }
+    CycleOrDropdownPicker(
+        items = catalog,
+        selected = current,
+        onSelected = { onSelect(it.id, it) },
+        labelFor = { "${it.name} · ${it.productLine}" },
+        placeholder = "Elegir del catálogo…",
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -835,7 +830,13 @@ private fun TransformationDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier =
+                    Modifier
+                        .heightIn(max = 560.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
                     "Marque los lotes de origen y cuántos postes tomar de cada uno. " +
                         "Indique luego cuántos salieron bien y cuántos fallaron.",
@@ -1107,15 +1108,13 @@ private fun ResourcePicker(
     modifier: Modifier = Modifier,
 ) {
     val current = resources.firstOrNull { it.id == selectedId } ?: resources.firstOrNull()
-    OutlinedButton(
-        onClick = {
-            if (resources.isEmpty()) return@OutlinedButton
-            val idx = resources.indexOfFirst { it.id == selectedId }.let { if (it < 0) 0 else it }
-            val next = resources[(idx + 1) % resources.size]
-            onSelect(next.id)
-        },
+    CycleOrDropdownPicker(
+        items = resources,
+        selected = current,
+        onSelected = { onSelect(it.id) },
+        labelFor = { "${it.name} (${it.unit})" },
+        placeholder = "Cree insumos primero",
         modifier = modifier,
-    ) {
-        Text(current?.let { "${it.name} (${it.unit})" } ?: "Cree insumos primero")
-    }
+        enabled = resources.isNotEmpty(),
+    )
 }

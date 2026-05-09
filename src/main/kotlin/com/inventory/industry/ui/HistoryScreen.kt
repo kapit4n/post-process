@@ -3,7 +3,6 @@ package com.inventory.industry.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,7 +10,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +23,10 @@ import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Transformation
 import com.inventory.industry.data.TransformationProcessingStatus
+import com.inventory.industry.ui.components.feedback.EmptyState
+import com.inventory.industry.ui.layout.EnterpriseScreenLayout
+import com.inventory.industry.ui.theme.AppSpacing
+import com.inventory.industry.ui.theme.AppTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,38 +38,24 @@ fun HistoryScreen(repo: InventoryRepository) {
         rows = withContext(Dispatchers.IO) { repo.listTransformations() }
     }
 
-    Scaffold { padding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                "Historial de transformaciones",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Registro de procesamientos terminados y procesos en curso (entre etapas). " +
-                    "Complete un proceso en «Postes por etapa» para mover inventario.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            when (val data = rows) {
-                null -> Text("Cargando…")
-                else -> {
-                    if (data.isEmpty()) {
-                        Text(
-                            "Aún no hay transformaciones registradas.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(data, key = { it.id }) { t ->
-                                TransformationCard(t)
-                            }
+    EnterpriseScreenLayout(
+        title = "Historial de transformaciones",
+        subtitle =
+            "Registro de procesamientos terminados y en curso entre etapas. " +
+                "Avance lotes desde «Por etapa».",
+    ) {
+        when (val data = rows) {
+            null -> Text("Cargando…", style = AppTypography.Body)
+            else -> {
+                if (data.isEmpty()) {
+                    EmptyState(
+                        title = "Sin transformaciones",
+                        message = "Aún no hay transformaciones registradas.",
+                    )
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
+                        items(data, key = { it.id }) { t ->
+                            TransformationCard(t)
                         }
                     }
                 }

@@ -8,7 +8,6 @@ import androidx.compose.ui.window.rememberWindowState
 import com.inventory.industry.data.IndustryDatabase
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.ui.layout.AppShell
-import com.inventory.industry.ui.theme.AppTheme
 
 fun main() =
     application {
@@ -19,8 +18,6 @@ fun main() =
             title = "Inventario · Postes de luz de madera",
             state = rememberWindowState(size = DpSize(1280.dp, 800.dp)),
         ) {
-            AppTheme {
-                AppShell(repo)
-            }
+            AppShell(repo)
         }
     }

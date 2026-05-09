@@ -15,6 +15,12 @@ class NavigationState(initialRoute: ScreenRoute = ScreenRoute.Dashboard) {
     var sidebarCollapsed: Boolean by mutableStateOf(false)
         private set
 
+    var useDarkTheme: Boolean by mutableStateOf(false)
+        private set
+
+    var commandPaletteVisible: Boolean by mutableStateOf(false)
+        private set
+
     fun navigateTo(route: ScreenRoute) {
         currentRoute = route
     }
@@ -25,6 +31,22 @@ class NavigationState(initialRoute: ScreenRoute = ScreenRoute.Dashboard) {
 
     fun toggleSidebarCollapsed() {
         sidebarCollapsed = !sidebarCollapsed
+    }
+
+    fun setDarkTheme(enabled: Boolean) {
+        useDarkTheme = enabled
+    }
+
+    fun toggleDarkTheme() {
+        useDarkTheme = !useDarkTheme
+    }
+
+    fun updateCommandPaletteVisible(visible: Boolean) {
+        commandPaletteVisible = visible
+    }
+
+    fun toggleCommandPalette() {
+        commandPaletteVisible = !commandPaletteVisible
     }
 }
 

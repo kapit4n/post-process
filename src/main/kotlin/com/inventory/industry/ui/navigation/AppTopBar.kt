@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.ManageSearch
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +56,9 @@ fun AppTopBar(
     dateSelector: (@Composable () -> Unit)? = null,
     avatar: (@Composable () -> Unit)? = null,
     actions: (@Composable () -> Unit)? = null,
+    useDarkTheme: Boolean = false,
+    onToggleDarkTheme: () -> Unit = {},
+    onOpenCommandPalette: () -> Unit = {},
     minHeight: Dp = 56.dp,
 ) {
     val showWideSearch = showSearch && windowSize.widthClass != WindowWidthClass.Compact
@@ -95,6 +101,20 @@ fun AppTopBar(
                     }
                     dateSelector?.invoke()
                     actions?.invoke()
+                    IconButton(onClick = onOpenCommandPalette) {
+                        Icon(
+                            imageVector = Icons.Outlined.ManageSearch,
+                            contentDescription = "Paleta de comandos (Ctrl+K)",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onToggleDarkTheme) {
+                        Icon(
+                            imageVector = if (useDarkTheme) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                            contentDescription = if (useDarkTheme) "Modo claro" else "Modo oscuro",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (showNotifications) {
                         IconButton(onClick = onNotificationsClick) {
                             Icon(

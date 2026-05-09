@@ -23,6 +23,7 @@ import org.jetbrains.exposed.sql.sum
 import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlin.comparisons.compareBy
+import kotlin.math.abs
 
 class InventoryRepository {
     fun listCatalogProducts(): List<CatalogProduct> =
@@ -129,6 +130,66 @@ class InventoryRepository {
         val salvage = products.filter { it.isFailed }.sumOf { it.quantity }
         return InventoryFlowSummary(perStage, inProcess, finished, salvage)
     }
+
+    /** Actividad reciente combinada (ventas, transformaciones, traslados) para el dashboard. */
+    fun recentDashboardActivity(limit: Int = 16): List<DashboardActivityEntry> {
+        val sales = listSales(40)
+        val transforms = listTransformations(40)
+        val transports = listProviderTransportRuns(25)
+        val events = mutableListOf<DashboardActivityEntry>()
+        sales.forEach { s ->
+            events.add(
+                DashboardActivityEntry(
+                    kind = DashboardActivityKind.Sale,
+                    title = "Venta · ${s.snapshotProductName}",
+                    subtitle =
+                        "${s.clientName} · ${fmtDashboardQty(s.quantitySold)} u. · ${fmtDashboardMoney(s.totalAmount)}",
+                    epochMs = s.soldAtEpochMs,
+                ),
+            )
+        }
+        transforms.forEach { t ->
+            val whenMs = t.processedAtEpochMs.coerceAtLeast(t.createdAtEpochMs)
+            val status =
+                if (t.processingStatus == TransformationProcessingStatus.IN_PROGRESS) {
+                    "En curso"
+                } else {
+                    "Completado"
+                }
+            events.add(
+                DashboardActivityEntry(
+                    kind = DashboardActivityKind.Transformation,
+                    title = "Producción ${t.fromStage.shortCode} → ${t.toStage.shortCode} · $status",
+                    subtitle =
+                        "Entrada ${fmtDashboardQty(t.totalInput)} postes · Costo ${fmtDashboardMoney(t.totalCost)}",
+                    epochMs = whenMs,
+                ),
+            )
+        }
+        transports.forEach { r ->
+            val whenMs =
+                listOfNotNull(
+                    r.arrivedAtEpochMs,
+                    r.departedAtEpochMs,
+                    r.createdAtEpochMs,
+                ).maxOrNull() ?: r.createdAtEpochMs
+            events.add(
+                DashboardActivityEntry(
+                    kind = DashboardActivityKind.Transport,
+                    title = "Traslado · ${r.driverName} (${r.vehiclePlate})",
+                    subtitle =
+                        "${r.lots.size} lote(s) · ${r.status.name.lowercase().replace('_', ' ')}",
+                    epochMs = whenMs,
+                ),
+            )
+        }
+        return events.sortedByDescending { it.epochMs }.take(limit)
+    }
+
+    private fun fmtDashboardQty(value: Double): String =
+        if (abs(value - value.toLong()) < 1e-6) value.toLong().toString() else "%.2f".format(value)
+
+    private fun fmtDashboardMoney(value: Double): String = "%.2f".format(value)
 
     fun listPoleProviders(): List<PoleProvider> =
         transaction {

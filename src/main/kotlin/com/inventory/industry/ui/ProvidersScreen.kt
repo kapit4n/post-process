@@ -3,28 +3,18 @@ package com.inventory.industry.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,10 +22,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.PoleProvider
+import com.inventory.industry.ui.components.buttons.AppButton
+import com.inventory.industry.ui.components.inputs.AppTextField
+import com.inventory.industry.ui.components.table.AppDataTable
+import com.inventory.industry.ui.components.table.AppTableColumn
+import com.inventory.industry.ui.layout.EnterpriseScreenLayout
+import com.inventory.industry.ui.theme.AppTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +41,7 @@ fun ProvidersScreen(repo: InventoryRepository) {
     var rows by remember { mutableStateOf<List<PoleProvider>>(emptyList()) }
     var editor by remember { mutableStateOf<PoleProvider?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -57,53 +54,59 @@ fun ProvidersScreen(repo: InventoryRepository) {
         reload()
     }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
+    val filtered by remember {
+        derivedStateOf {
+            val q = search.trim().lowercase()
+            if (q.isEmpty()) rows
+            else rows.filter { it.name.lowercase().contains(q) || (it.contact?.lowercase()?.contains(q) == true) }
+        }
+    }
+
+    EnterpriseScreenLayout(
+        title = "Proveedores de postes",
+        subtitle =
+            "Registre de quién proviene la madera en etapa Crudo. Vincule al crear o editar lotes.",
+        showSearch = true,
+        searchValue = search,
+        onSearchChange = { search = it },
+        searchPlaceholder = "Buscar proveedor…",
+        actions = {
+            AppButton(
+                text = "Nuevo proveedor",
                 onClick = {
                     creating = true
                     editor = null
                 },
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar proveedor")
-            }
+            )
         },
-    ) { padding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                "Proveedores de postes / troncos",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Registre de quién proviene la madera en etapa Crudo. Al crear o editar un lote " +
-                    "puede seleccionar el proveedor para trazabilidad y reportes de venta.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Nombre", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Text("Contacto", modifier = Modifier.weight(0.9f), fontWeight = FontWeight.SemiBold)
-                Text("", modifier = Modifier.weight(0.45f))
-            }
-            HorizontalDivider()
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(rows, key = { it.id }) { p ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(p.name, modifier = Modifier.weight(1f), maxLines = 2)
-                        Text(p.contact.orEmpty(), modifier = Modifier.weight(0.9f), maxLines = 2)
-                        Row(
-                            modifier = Modifier.weight(0.45f),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
+    ) {
+        val columns =
+            listOf(
+                AppTableColumn<PoleProvider>(
+                    header = "Nombre",
+                    weight = 1f,
+                    cell = { p ->
+                        Text(p.name, style = AppTypography.Body, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
+                ),
+                AppTableColumn(
+                    header = "Contacto",
+                    weight = 0.9f,
+                    cell = { p ->
+                        Text(
+                            p.contact.orEmpty(),
+                            style = AppTypography.BodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                ),
+                AppTableColumn(
+                    header = "",
+                    weight = 0.45f,
+                    cell = { p ->
+                        Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = {
                                 editor = p
                                 creating = false
@@ -121,11 +124,10 @@ fun ProvidersScreen(repo: InventoryRepository) {
                                 Icon(Icons.Default.Delete, contentDescription = "Eliminar")
                             }
                         }
-                    }
-                    HorizontalDivider()
-                }
-            }
-        }
+                    },
+                ),
+            )
+        AppDataTable(items = filtered, columns = columns, key = { it.id })
     }
 
     if (creating || editor != null) {
@@ -163,22 +165,24 @@ private fun ProviderEditorDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "Nuevo proveedor" else "Editar proveedor") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") })
-                TextField(
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppTextField(value = name, onValueChange = { name = it }, label = "Nombre")
+                AppTextField(
                     value = contact,
                     onValueChange = { contact = it },
-                    label = { Text("Contacto (tel., correo…)") },
+                    label = "Contacto (tel., correo…)",
                 )
-                TextField(
+                AppTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Notas (opcional)") },
+                    label = "Notas (opcional)",
+                    maxLines = 4,
+                    singleLine = false,
                 )
             }
         },
         confirmButton = {
-            Button(
+            TextButton(
                 onClick = {
                     onSave(
                         initial?.id,

@@ -235,6 +235,21 @@ data class StageInventoryRow(
     val failedPoles: Double,
 )
 
+/** Evento reciente para el panel de actividad del dashboard. */
+data class DashboardActivityEntry(
+    val kind: DashboardActivityKind,
+    val title: String,
+    val subtitle: String,
+    val epochMs: Long,
+)
+
+enum class DashboardActivityKind {
+    Sale,
+    Transformation,
+    Transport,
+    Inventory,
+}
+
 /** Resumen global: en proceso, listos para venta estándar, saldo fallado. */
 data class InventoryFlowSummary(
     val perStage: List<StageInventoryRow>,

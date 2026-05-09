@@ -146,8 +146,9 @@ fun SalesScreen(repo: InventoryRepository) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Venta de postes en estado Terminado (OK) o lotes fallados a precio de saldo. " +
-                    "El precio sugerido suma adquisición, procesamiento (insumos del lote) y un % de ganancia.",
+                    "Venta de postes en estado Terminado (OK) o lotes fallados a precio de saldo. " +
+                        "El precio sugerido aplica el % de ganancia sobre el costo total por poste: " +
+                        "material (proveedor) + traslado prorrateado (líneas del lote y flete/grúa de envíos cerrados) + procesamiento (insumos).",
                 style = MaterialTheme.typography.bodyMedium,
             )
 
@@ -238,22 +239,32 @@ fun SalesScreen(repo: InventoryRepository) {
                         Modifier.padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text("Estimación de costo y precio", fontWeight = FontWeight.SemiBold)
+                        Text("Estimación de costo y precio sugerido", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Adquisición esta venta: ${formatMoney(prev.acquisitionTotalForSaleQty)} " +
+                            "Costo de adquisición en esta venta: ${formatMoney(prev.acquisitionTotalForSaleQty)} " +
                                 "(material ${formatMoney(prev.acquisitionMaterialTotalForSaleQty)} · " +
-                                "traslado ${formatMoney(prev.acquisitionTransportTotalForSaleQty)}) · " +
-                                "Proceso: ${formatMoney(prev.processingTotalForSaleQty)}",
+                                "traslado prorrateado ${formatMoney(prev.acquisitionTransportTotalForSaleQty)})",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Text(
-                            "Costo unitario (material+traslado+proceso): ${formatMoney(prev.unitCostBasis)} · " +
-                                "Sugerido / poste: ${formatMoney(prev.suggestedUnitPrice)}",
+                            "Desglose / poste (sobre la cantidad disponible del lote): " +
+                                "material ${formatMoney(prev.acquisitionMaterialPerPole ?: 0.0)} + " +
+                                "traslado ${formatMoney(prev.acquisitionTransportPerPole)} + " +
+                                "proceso ${formatMoney(prev.processingCostPerPole)} " +
+                                "= ${formatMoney(prev.unitCostBasis)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "Total sugerido (${marginText.trim()} %): ${formatMoney(prev.suggestedTotal)}",
+                            "Procesamiento (esta cantidad): ${formatMoney(prev.processingTotalForSaleQty)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Precio sugerido / poste: costo total/poste × (1 + ${marginText.trim()} %) = ${formatMoney(prev.suggestedUnitPrice)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Total sugerido (${marginText.trim()} % sobre costo, incluye traslado prorrateado): ${formatMoney(prev.suggestedTotal)}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Medium,
                         )

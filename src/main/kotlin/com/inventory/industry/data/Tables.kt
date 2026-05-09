@@ -65,6 +65,51 @@ object ProductsTable : Table("products") {
     override val primaryKey = PrimaryKey(id)
 }
 
+/** Choferes que realizan traslados desde predio proveedor a planta. */
+object DriversTable : Table("drivers") {
+    val id = integer("id").autoIncrement()
+    val name = varchar("name", 255)
+    val phone = varchar("phone", 64).nullable()
+    val notes = text("notes").nullable()
+    val createdAtEpochMs = long("created_at_ms")
+    override val primaryKey = PrimaryKey(id)
+}
+
+/**
+ * Viaje de traslado de lotes desde predio proveedor hacia planta.
+ * Mientras está en curso, los lotes quedan en ubicación EN_TRANSITO.
+ */
+object ProviderTransportRunsTable : Table("provider_transport_runs") {
+    val id = integer("id").autoIncrement()
+    val driverId =
+        integer("driver_id").references(DriversTable.id, onDelete = ReferenceOption.RESTRICT)
+    /** Patente / identificación del vehículo. */
+    val vehiclePlate = varchar("vehicle_plate", 64)
+    /** Costo total del flete / transporte del viaje. */
+    val freightCost = double("freight_cost")
+    /** Costo total de grúa del viaje. */
+    val gruaCost = double("grua_cost").default(0.0)
+    val departedAtEpochMs = long("departed_at_ms")
+    val expectedArrivalEpochMs = long("expected_arrival_ms").nullable()
+    val arrivedAtEpochMs = long("arrived_at_ms").nullable()
+    val status = varchar("status", 24).default("IN_PROGRESS")
+    val notes = text("notes").nullable()
+    val createdAtEpochMs = long("created_at_ms")
+    override val primaryKey = PrimaryKey(id)
+}
+
+/** Lotes incluidos en un viaje de traslado. */
+object ProviderTransportRunProductsTable : Table("provider_transport_run_products") {
+    val id = integer("id").autoIncrement()
+    val transportRunId =
+        integer("transport_run_id")
+            .references(ProviderTransportRunsTable.id, onDelete = ReferenceOption.CASCADE)
+    val productId =
+        integer("product_id")
+            .references(ProductsTable.id, onDelete = ReferenceOption.CASCADE)
+    override val primaryKey = PrimaryKey(id)
+}
+
 /**
  * Costos de traslado desde el proveedor (camión, cargador, etc.), en total para el lote.
  * Se prorratean por poste (total del lote ÷ cantidad) y suman al costo de adquisición puesto en planta.
@@ -135,6 +180,13 @@ object TransformationsTable : Table("transformations") {
     val id = integer("id").autoIncrement()
     val fromStage = varchar("from_stage", 32)
     val toStage = varchar("to_stage", 32)
+    /**
+     * IN_PROGRESS = proceso iniciado (sin mover inventario aún);
+     * COMPLETED = resultado aplicado al inventario.
+     */
+    val processingStatus = varchar("processing_status", 24).default("COMPLETED")
+    /** Hora en que se pulsó «Iniciar proceso» (sólo sentido si hubo etapa intermedia). */
+    val startedAtEpochMs = long("started_at_ms").nullable()
     val processedAtEpochMs = long("processed_at_ms")
     val durationMinutes = integer("duration_minutes").default(0)
     val successCount = double("success_count").default(0.0)

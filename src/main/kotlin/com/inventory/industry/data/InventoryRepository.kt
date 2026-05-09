@@ -180,6 +180,406 @@ class InventoryRepository {
         }
     }
 
+    sealed class TransportRunResult {
+        data class Ok(val runId: Int) : TransportRunResult()
+
+        data class Err(val message: String) : TransportRunResult()
+    }
+
+    fun listDrivers(): List<Driver> =
+        transaction {
+            DriversTable
+                .selectAll()
+                .orderBy(DriversTable.name to SortOrder.ASC)
+                .map {
+                    Driver(
+                        id = it[DriversTable.id],
+                        name = it[DriversTable.name],
+                        phone = it[DriversTable.phone],
+                        notes = it[DriversTable.notes],
+                        createdAtEpochMs = it[DriversTable.createdAtEpochMs],
+                    )
+                }
+        }
+
+    fun upsertDriver(
+        id: Int?,
+        name: String,
+        phone: String?,
+        notes: String?,
+    ): Int =
+        transaction {
+            val now = System.currentTimeMillis()
+            if (id == null) {
+                DriversTable.insert {
+                    it[DriversTable.name] = name.trim()
+                    it[DriversTable.phone] = phone?.trim()?.ifBlank { null }
+                    it[DriversTable.notes] = notes?.trim()?.ifBlank { null }
+                    it[DriversTable.createdAtEpochMs] = now
+                }[DriversTable.id]
+            } else {
+                DriversTable.update({ DriversTable.id eq id }) {
+                    it[DriversTable.name] = name.trim()
+                    it[DriversTable.phone] = phone?.trim()?.ifBlank { null }
+                    it[DriversTable.notes] = notes?.trim()?.ifBlank { null }
+                }
+                id
+            }
+        }
+
+    fun deleteDriver(id: Int): Boolean =
+        transaction {
+            val used =
+                ProviderTransportRunsTable
+                    .selectAll()
+                    .where { ProviderTransportRunsTable.driverId eq id }
+                    .count()
+            if (used > 0L) return@transaction false
+            DriversTable.deleteWhere { DriversTable.id eq id }
+            true
+        }
+
+    /** Lotes en predio proveedor listos para iniciar un traslado a planta. */
+    fun listProductsReadyPickupAtProvider(): List<Product> =
+        listProducts()
+            .filter {
+                !it.isFailed && it.acquisitionStorageLocation == PoleStorageLocation.EN_PROVEEDOR
+            }
+            .sortedBy { it.name }
+
+    fun startProviderTransport(
+        driverId: Int,
+        vehiclePlate: String,
+        freightCost: Double,
+        gruaCost: Double,
+        departedAtEpochMs: Long,
+        expectedArrivalEpochMs: Long?,
+        productIds: List<Int>,
+        notes: String?,
+    ): TransportRunResult =
+        transaction {
+            val plate = vehiclePlate.trim()
+            if (plate.isEmpty()) {
+                return@transaction TransportRunResult.Err("Indique patente o identificación del vehículo.")
+            }
+            if (freightCost < -1e-9 || gruaCost < -1e-9) {
+                return@transaction TransportRunResult.Err("Los costos no pueden ser negativos.")
+            }
+            val distinctIds = productIds.distinct().filter { it > 0 }
+            if (distinctIds.isEmpty()) {
+                return@transaction TransportRunResult.Err(
+                    "Seleccione al menos un lote ubicado en predio proveedor.",
+                )
+            }
+
+            DriversTable
+                .selectAll()
+                .where { DriversTable.id eq driverId }
+                .singleOrNull()
+                ?: return@transaction TransportRunResult.Err("Chofer no encontrado.")
+
+            for (pid in distinctIds) {
+                val otherRuns =
+                    ProviderTransportRunProductsTable
+                        .selectAll()
+                        .where { ProviderTransportRunProductsTable.productId eq pid }
+                for (link in otherRuns) {
+                    val rid = link[ProviderTransportRunProductsTable.transportRunId]
+                    val stRow =
+                        ProviderTransportRunsTable
+                            .selectAll()
+                            .where { ProviderTransportRunsTable.id eq rid }
+                            .singleOrNull() ?: continue
+                    if (
+                        ProviderTransportRunStatus.fromDb(stRow[ProviderTransportRunsTable.status]) ==
+                        ProviderTransportRunStatus.IN_PROGRESS
+                    ) {
+                        return@transaction TransportRunResult.Err(
+                            "El lote #$pid ya figura en otro traslado en curso.",
+                        )
+                    }
+                }
+            }
+
+            for (pid in distinctIds) {
+                val prow =
+                    ProductsTable
+                        .selectAll()
+                        .where { ProductsTable.id eq pid }
+                        .singleOrNull()
+                        ?: return@transaction TransportRunResult.Err("Lote #$pid no existe.")
+                if (prow[ProductsTable.isFailed]) {
+                    return@transaction TransportRunResult.Err(
+                        "El lote '${prow[ProductsTable.name]}' está en saldo / fallado.",
+                    )
+                }
+                val loc = PoleStorageLocation.fromDb(prow[ProductsTable.acquisitionStorageLocation])
+                if (loc != PoleStorageLocation.EN_PROVEEDOR) {
+                    return@transaction TransportRunResult.Err(
+                        "El lote '${prow[ProductsTable.name]}' debe estar en predio proveedor " +
+                            "(ubicación actual: ${loc.shortLabel}).",
+                    )
+                }
+            }
+
+            val now = System.currentTimeMillis()
+            val runId =
+                ProviderTransportRunsTable.insert {
+                    it[ProviderTransportRunsTable.driverId] = driverId
+                    it[ProviderTransportRunsTable.vehiclePlate] = plate
+                    it[ProviderTransportRunsTable.freightCost] = freightCost
+                    it[ProviderTransportRunsTable.gruaCost] = gruaCost
+                    it[ProviderTransportRunsTable.departedAtEpochMs] = departedAtEpochMs
+                    it[ProviderTransportRunsTable.expectedArrivalEpochMs] = expectedArrivalEpochMs
+                    it[ProviderTransportRunsTable.arrivedAtEpochMs] = null
+                    it[ProviderTransportRunsTable.status] = ProviderTransportRunStatus.IN_PROGRESS.name
+                    it[ProviderTransportRunsTable.notes] = notes?.trim()?.ifBlank { null }
+                    it[ProviderTransportRunsTable.createdAtEpochMs] = now
+                }[ProviderTransportRunsTable.id]
+
+            for (pid in distinctIds) {
+                ProviderTransportRunProductsTable.insert {
+                    it[ProviderTransportRunProductsTable.transportRunId] = runId
+                    it[ProviderTransportRunProductsTable.productId] = pid
+                }
+                ProductsTable.update({ ProductsTable.id eq pid }) {
+                    it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.EN_TRANSITO.name
+                }
+            }
+
+            TransportRunResult.Ok(runId)
+        }
+
+    fun completeProviderTransport(
+        runId: Int,
+        arrivedAtEpochMs: Long,
+    ): TransportRunResult =
+        transaction {
+            val runRow =
+                ProviderTransportRunsTable
+                    .selectAll()
+                    .where { ProviderTransportRunsTable.id eq runId }
+                    .singleOrNull()
+                    ?: return@transaction TransportRunResult.Err("Traslado no encontrado.")
+            if (
+                ProviderTransportRunStatus.fromDb(runRow[ProviderTransportRunsTable.status]) !=
+                ProviderTransportRunStatus.IN_PROGRESS
+            ) {
+                return@transaction TransportRunResult.Err("Este traslado no está en curso.")
+            }
+            val freightTotal = runRow[ProviderTransportRunsTable.freightCost]
+            val gruaTotal = runRow[ProviderTransportRunsTable.gruaCost]
+
+            val links =
+                ProviderTransportRunProductsTable
+                    .selectAll()
+                    .where { ProviderTransportRunProductsTable.transportRunId eq runId }
+            val productIds = links.map { it[ProviderTransportRunProductsTable.productId] }
+            if (productIds.isEmpty()) {
+                return@transaction TransportRunResult.Err("El traslado no tiene lotes asociados.")
+            }
+
+            val productRows =
+                productIds.map { pid ->
+                    ProductsTable
+                        .selectAll()
+                        .where { ProductsTable.id eq pid }
+                        .singleOrNull()
+                        ?: return@transaction TransportRunResult.Err("Lote #$pid no existe.")
+                }
+            val totalQty = productRows.sumOf { it[ProductsTable.quantity] }
+            if (totalQty <= 1e-12) {
+                return@transaction TransportRunResult.Err("Cantidad total inválida.")
+            }
+
+            val now = System.currentTimeMillis()
+            val labelFreight = "Flete (traslado #${runId})"
+            val labelGrua = "Grua (traslado #${runId})"
+
+            for (row in productRows) {
+                val pid = row[ProductsTable.id]
+                val q = row[ProductsTable.quantity]
+                val share = q / totalQty
+                val fShare = freightTotal * share
+                val gShare = gruaTotal * share
+                if (fShare > 1e-9) {
+                    AcquisitionTransportCostsTable.insert {
+                        it[AcquisitionTransportCostsTable.productId] = pid
+                        it[AcquisitionTransportCostsTable.label] = labelFreight
+                        it[AcquisitionTransportCostsTable.lineCost] = fShare
+                        it[AcquisitionTransportCostsTable.notes] = null
+                        it[AcquisitionTransportCostsTable.createdAtEpochMs] = now
+                    }
+                }
+                if (gShare > 1e-9) {
+                    AcquisitionTransportCostsTable.insert {
+                        it[AcquisitionTransportCostsTable.productId] = pid
+                        it[AcquisitionTransportCostsTable.label] = labelGrua
+                        it[AcquisitionTransportCostsTable.lineCost] = gShare
+                        it[AcquisitionTransportCostsTable.notes] = null
+                        it[AcquisitionTransportCostsTable.createdAtEpochMs] = now
+                    }
+                }
+                ProductsTable.update({ ProductsTable.id eq pid }) {
+                    it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.FABRICA.name
+                }
+            }
+
+            ProviderTransportRunsTable.update({ ProviderTransportRunsTable.id eq runId }) {
+                it[ProviderTransportRunsTable.status] = ProviderTransportRunStatus.COMPLETED.name
+                it[ProviderTransportRunsTable.arrivedAtEpochMs] = arrivedAtEpochMs
+            }
+
+            TransportRunResult.Ok(runId)
+        }
+
+    fun cancelProviderTransport(runId: Int): TransportRunResult =
+        transaction {
+            val runRow =
+                ProviderTransportRunsTable
+                    .selectAll()
+                    .where { ProviderTransportRunsTable.id eq runId }
+                    .singleOrNull()
+                    ?: return@transaction TransportRunResult.Err("Traslado no encontrado.")
+            if (
+                ProviderTransportRunStatus.fromDb(runRow[ProviderTransportRunsTable.status]) !=
+                ProviderTransportRunStatus.IN_PROGRESS
+            ) {
+                return@transaction TransportRunResult.Err("Sólo se cancelan traslados en curso.")
+            }
+            val pids =
+                ProviderTransportRunProductsTable
+                    .selectAll()
+                    .where { ProviderTransportRunProductsTable.transportRunId eq runId }
+                    .map { it[ProviderTransportRunProductsTable.productId] }
+            for (pid in pids) {
+                ProductsTable.update({ ProductsTable.id eq pid }) {
+                    it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.EN_PROVEEDOR.name
+                }
+            }
+            ProviderTransportRunsTable.deleteWhere { ProviderTransportRunsTable.id eq runId }
+            TransportRunResult.Ok(runId)
+        }
+
+    fun listProviderTransportRuns(limit: Int = 100): List<ProviderTransportRun> =
+        transaction {
+            val runRows =
+                ProviderTransportRunsTable
+                    .selectAll()
+                    .orderBy(ProviderTransportRunsTable.departedAtEpochMs to SortOrder.DESC)
+                    .limit(limit)
+                    .toList()
+            if (runRows.isEmpty()) return@transaction emptyList()
+
+            val driverIds = runRows.map { it[ProviderTransportRunsTable.driverId] }.distinct()
+            val driversById =
+                DriversTable
+                    .selectAll()
+                    .where { DriversTable.id inList driverIds }
+                    .associate { it[DriversTable.id] to it[DriversTable.name] }
+
+            val runIds = runRows.map { it[ProviderTransportRunsTable.id] }
+            val lotRows =
+                ProviderTransportRunProductsTable
+                    .selectAll()
+                    .where { ProviderTransportRunProductsTable.transportRunId inList runIds }
+            val allPids = lotRows.map { it[ProviderTransportRunProductsTable.productId] }.distinct()
+            val productInfo: Map<Int, Pair<String, Double>> =
+                if (allPids.isEmpty()) {
+                    emptyMap()
+                } else {
+                    ProductsTable
+                        .selectAll()
+                        .where { ProductsTable.id inList allPids }
+                        .associate {
+                            it[ProductsTable.id] to
+                                (it[ProductsTable.name] to it[ProductsTable.quantity])
+                        }
+                }
+            val lotsByRunId =
+                lotRows
+                    .groupBy { it[ProviderTransportRunProductsTable.transportRunId] }
+                    .mapValues { (_, lst) ->
+                        lst.mapNotNull { lr ->
+                            val pid = lr[ProviderTransportRunProductsTable.productId]
+                            val p = productInfo[pid] ?: return@mapNotNull null
+                            ProviderTransportRunLot(
+                                productId = pid,
+                                productName = p.first,
+                                quantity = p.second,
+                            )
+                        }
+                    }
+
+            runRows.map { r ->
+                val id = r[ProviderTransportRunsTable.id]
+                ProviderTransportRun(
+                    id = id,
+                    driverId = r[ProviderTransportRunsTable.driverId],
+                    driverName = driversById[r[ProviderTransportRunsTable.driverId]] ?: "—",
+                    vehiclePlate = r[ProviderTransportRunsTable.vehiclePlate],
+                    freightCost = r[ProviderTransportRunsTable.freightCost],
+                    gruaCost = r[ProviderTransportRunsTable.gruaCost],
+                    departedAtEpochMs = r[ProviderTransportRunsTable.departedAtEpochMs],
+                    expectedArrivalEpochMs = r[ProviderTransportRunsTable.expectedArrivalEpochMs],
+                    arrivedAtEpochMs = r[ProviderTransportRunsTable.arrivedAtEpochMs],
+                    status = ProviderTransportRunStatus.fromDb(r[ProviderTransportRunsTable.status]),
+                    notes = r[ProviderTransportRunsTable.notes],
+                    createdAtEpochMs = r[ProviderTransportRunsTable.createdAtEpochMs],
+                    lots = lotsByRunId[id].orEmpty(),
+                )
+            }
+        }
+
+    /**
+     * Para cada lote en un envío **en curso**: datos de salida, ETA a planta y referencia del traslado.
+     */
+    fun inboundEtaByProductId(productIds: Collection<Int>): Map<Int, PoleInboundEta> =
+        transaction {
+            val ids = productIds.distinct().filter { it > 0 }
+            if (ids.isEmpty()) return@transaction emptyMap()
+            val links =
+                ProviderTransportRunProductsTable
+                    .selectAll()
+                    .where { ProviderTransportRunProductsTable.productId inList ids }
+            if (!links.any()) return@transaction emptyMap()
+
+            val runIds = links.map { it[ProviderTransportRunProductsTable.transportRunId] }.distinct()
+            val activeRuns =
+                ProviderTransportRunsTable
+                    .selectAll()
+                    .where {
+                        (ProviderTransportRunsTable.id inList runIds) and
+                            (ProviderTransportRunsTable.status eq ProviderTransportRunStatus.IN_PROGRESS.name)
+                    }
+                    .associateBy { it[ProviderTransportRunsTable.id] }
+            if (activeRuns.isEmpty()) return@transaction emptyMap()
+
+            val driverIds =
+                activeRuns.values.map { it[ProviderTransportRunsTable.driverId] }.distinct()
+            val driverNames =
+                DriversTable
+                    .selectAll()
+                    .where { DriversTable.id inList driverIds }
+                    .associate { it[DriversTable.id] to it[DriversTable.name] }
+
+            val out = mutableMapOf<Int, PoleInboundEta>()
+            for (link in links) {
+                val pid = link[ProviderTransportRunProductsTable.productId]
+                val rid = link[ProviderTransportRunProductsTable.transportRunId]
+                val run = activeRuns[rid] ?: continue
+                out[pid] =
+                    PoleInboundEta(
+                        transportRunId = rid,
+                        driverName = driverNames[run[ProviderTransportRunsTable.driverId]] ?: "—",
+                        vehiclePlate = run[ProviderTransportRunsTable.vehiclePlate],
+                        departedAtEpochMs = run[ProviderTransportRunsTable.departedAtEpochMs],
+                        expectedArrivalEpochMs = run[ProviderTransportRunsTable.expectedArrivalEpochMs],
+                    )
+            }
+            out
+        }
+
     fun listClients(): List<Client> =
         transaction {
             ClientsTable
@@ -494,6 +894,16 @@ class InventoryRepository {
             }
         }
 
+    /**
+     * Suma de todas las líneas de traslado del lote (costos cargados en predio + flete/grúa
+     * prorrateados al cerrar viajes en «Traslados»). Se reparte entre la cantidad de postes
+     * para el costo de adquisición puesto en planta.
+     */
+    fun acquisitionTransportTotalForProduct(productId: Int): Double =
+        transaction {
+            transportCostSumForProduct(productId)
+        }
+
     fun listAcquisitionTransportForProduct(productId: Int): List<AcquisitionTransportLine> =
         transaction {
             AcquisitionTransportCostsTable
@@ -644,7 +1054,8 @@ class InventoryRepository {
         }
 
     /**
-     * Vista previa para venta: costo por poste (adquisición + proceso prorrateado) y precio sugerido.
+     * Vista previa para venta: el precio sugerido aplica [marginPercent] sobre el costo por poste
+     * (materia prima + traslado total del lote prorrateado por poste + proceso con insumos).
      */
     fun saleCostPreview(
         productId: Int,
@@ -969,6 +1380,64 @@ class InventoryRepository {
         val quantity: Double,
     )
 
+    private fun fmt(v: Double): String =
+        if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f".format(v)
+
+    /** Resuelve y valida lotes fuente; si [Pair.second] no es null, hubo error. */
+    private fun org.jetbrains.exposed.sql.Transaction.sourceLotsOrErr(
+        fromStage: ProductStage,
+        inputs: List<SourceDraft>,
+    ): Pair<List<Pair<ResultRow, Double>>, String?> {
+        if (inputs.isEmpty()) return Pair(emptyList(), "Seleccione al menos un lote origen.")
+        if (inputs.any { it.quantity <= 0 }) {
+            return Pair(emptyList(), "Las cantidades deben ser mayores a cero.")
+        }
+        val mergedByBatch: Map<Int, Double> =
+            inputs.groupBy { it.sourceProductId }
+                .mapValues { (_, list) -> list.sumOf { it.quantity } }
+        val sources = mutableListOf<Pair<ResultRow, Double>>()
+        for ((pid, qty) in mergedByBatch) {
+            val row =
+                ProductsTable
+                    .selectAll()
+                    .where { ProductsTable.id eq pid }
+                    .singleOrNull()
+                    ?: return Pair(emptyList(), "Lote origen $pid no existe.")
+            val stage = ProductStage.fromDb(row[ProductsTable.stage])
+            if (stage != fromStage) {
+                return Pair(
+                    emptyList(),
+                    "El lote '${row[ProductsTable.name]}' no está en ${fromStage.shortCode}.",
+                )
+            }
+            if (row[ProductsTable.isFailed]) {
+                return Pair(
+                    emptyList(),
+                    "El lote '${row[ProductsTable.name]}' está marcado como fallado.",
+                )
+            }
+            val storageLoc =
+                PoleStorageLocation.fromDb(row[ProductsTable.acquisitionStorageLocation])
+            if (storageLoc != PoleStorageLocation.FABRICA) {
+                return Pair(
+                    emptyList(),
+                    "El lote '${row[ProductsTable.name]}' aún no está en fábrica (${storageLoc.shortLabel}). " +
+                        "Registre la llegada en «Traslados» antes de procesar.",
+                )
+            }
+            val available = row[ProductsTable.quantity]
+            if (qty - available > 1e-6) {
+                return Pair(
+                    emptyList(),
+                    "El lote '${row[ProductsTable.name]}' sólo tiene ${fmt(available)} " +
+                        "disponibles (pidió ${fmt(qty)}).",
+                )
+            }
+            sources.add(row to qty)
+        }
+        return Pair(sources, null)
+    }
+
     sealed class TransformationResult {
         data class Ok(val id: Int) : TransformationResult()
 
@@ -1018,45 +1487,17 @@ class InventoryRepository {
                 )
             }
 
-            val mergedByBatch: Map<Int, Double> =
-                inputs.groupBy { it.sourceProductId }
-                    .mapValues { (_, list) -> list.sumOf { it.quantity } }
-            val sources =
-                mergedByBatch.map { (pid, qty) ->
-                    val row =
-                        ProductsTable
-                            .selectAll()
-                            .where { ProductsTable.id eq pid }
-                            .singleOrNull()
-                            ?: return@transaction TransformationResult.Err(
-                                "Lote origen $pid no existe.",
-                            )
-                    val stage = ProductStage.fromDb(row[ProductsTable.stage])
-                    if (stage != fromStage) {
-                        return@transaction TransformationResult.Err(
-                            "El lote '${row[ProductsTable.name]}' no está en ${fromStage.shortCode}.",
-                        )
-                    }
-                    if (row[ProductsTable.isFailed]) {
-                        return@transaction TransformationResult.Err(
-                            "El lote '${row[ProductsTable.name]}' está marcado como fallado.",
-                        )
-                    }
-                    val available = row[ProductsTable.quantity]
-                    if (qty - available > 1e-6) {
-                        return@transaction TransformationResult.Err(
-                            "El lote '${row[ProductsTable.name]}' sólo tiene ${fmt(available)} " +
-                                "disponibles (pidió ${fmt(qty)}).",
-                        )
-                    }
-                    row to qty
-                }
+            val (sources, srcErr) = sourceLotsOrErr(fromStage, inputs)
+            if (srcErr != null) return@transaction TransformationResult.Err(srcErr)
 
             val now = System.currentTimeMillis()
             val transformationId =
                 TransformationsTable.insert {
                     it[TransformationsTable.fromStage] = fromStage.name
                     it[TransformationsTable.toStage] = toStage.name
+                    it[TransformationsTable.processingStatus] =
+                        TransformationProcessingStatus.COMPLETED.name
+                    it[TransformationsTable.startedAtEpochMs] = processedAtEpochMs
                     it[TransformationsTable.processedAtEpochMs] = processedAtEpochMs
                     it[TransformationsTable.durationMinutes] = durationMinutes
                     it[TransformationsTable.successCount] = successCount
@@ -1185,6 +1626,350 @@ class InventoryRepository {
             TransformationResult.Ok(transformationId)
         }
 
+    private fun org.jetbrains.exposed.sql.Transaction.hydrateTransformationRows(
+        trows: List<ResultRow>,
+    ): List<Transformation> {
+        if (trows.isEmpty()) return emptyList()
+        val ids = trows.map { it[TransformationsTable.id] }
+        val inputsByTx =
+            TransformationInputsTable
+                .selectAll()
+                .where { TransformationInputsTable.transformationId inList ids }
+                .groupBy { it[TransformationInputsTable.transformationId] }
+                .mapValues { (_, rows) ->
+                    rows.map {
+                        TransformationInputView(
+                            id = it[TransformationInputsTable.id],
+                            sourceProductId = it[TransformationInputsTable.sourceProductId],
+                            sourceName = it[TransformationInputsTable.sourceName],
+                            sourceLine = it[TransformationInputsTable.sourceLine],
+                            quantity = it[TransformationInputsTable.quantity],
+                        )
+                    }
+                }
+
+        val costByTx =
+            ProcessCostsTable
+                .selectAll()
+                .where { ProcessCostsTable.transformationId inList ids }
+                .groupBy { it[ProcessCostsTable.transformationId]!! }
+                .mapValues { (_, rows) -> rows.sumOf { it[ProcessCostsTable.lineCost] } }
+
+        return trows.map { row ->
+            val id = row[TransformationsTable.id]
+            val st =
+                TransformationProcessingStatus.fromDb(
+                    row[TransformationsTable.processingStatus],
+                )
+            Transformation(
+                id = id,
+                fromStage = ProductStage.fromDb(row[TransformationsTable.fromStage]),
+                toStage = ProductStage.fromDb(row[TransformationsTable.toStage]),
+                processingStatus = st,
+                startedAtEpochMs = row[TransformationsTable.startedAtEpochMs],
+                processedAtEpochMs = row[TransformationsTable.processedAtEpochMs],
+                durationMinutes = row[TransformationsTable.durationMinutes],
+                successCount = row[TransformationsTable.successCount],
+                failedCount = row[TransformationsTable.failedCount],
+                notes = row[TransformationsTable.notes],
+                createdAtEpochMs = row[TransformationsTable.createdAtEpochMs],
+                inputs = inputsByTx[id].orEmpty(),
+                totalCost = costByTx[id] ?: 0.0,
+            )
+        }
+    }
+
+    /**
+     * Declara que comenzó un proceso hacia la siguiente etapa. El inventario no cambia hasta
+     * [completeStageProcess] o se elimina el registro con [cancelStageProcess].
+     */
+    fun startStageProcess(
+        fromStage: ProductStage,
+        inputs: List<SourceDraft>,
+        startedAtEpochMs: Long,
+        notes: String?,
+    ): TransformationResult =
+        transaction {
+            val toStage =
+                fromStage.next()
+                    ?: return@transaction TransformationResult.Err(
+                        "La etapa ${fromStage.shortCode} no tiene siguiente fase.",
+                    )
+            val (sources, srcErr) = sourceLotsOrErr(fromStage, inputs)
+            if (srcErr != null) return@transaction TransformationResult.Err(srcErr)
+
+            val now = System.currentTimeMillis()
+            val transformationId =
+                TransformationsTable.insert {
+                    it[TransformationsTable.fromStage] = fromStage.name
+                    it[TransformationsTable.toStage] = toStage.name
+                    it[TransformationsTable.processingStatus] =
+                        TransformationProcessingStatus.IN_PROGRESS.name
+                    it[TransformationsTable.startedAtEpochMs] = startedAtEpochMs
+                    it[TransformationsTable.processedAtEpochMs] = startedAtEpochMs
+                    it[TransformationsTable.durationMinutes] = 0
+                    it[TransformationsTable.successCount] = 0.0
+                    it[TransformationsTable.failedCount] = 0.0
+                    it[TransformationsTable.notes] = notes
+                    it[TransformationsTable.createdAtEpochMs] = now
+                }[TransformationsTable.id]
+
+            sources.forEach { (row, takeQty) ->
+                val sourceId = row[ProductsTable.id]
+                TransformationInputsTable.insert {
+                    it[TransformationInputsTable.transformationId] = transformationId
+                    it[TransformationInputsTable.sourceProductId] = sourceId
+                    it[TransformationInputsTable.sourceName] = row[ProductsTable.name]
+                    it[TransformationInputsTable.sourceLine] = row[ProductsTable.productLine]
+                    it[TransformationInputsTable.quantity] = takeQty
+                }
+            }
+
+            TransformationResult.Ok(transformationId)
+        }
+
+    /** Cierra un proceso en curso aplicando inventario e insumos. */
+    fun completeStageProcess(
+        transformationId: Int,
+        successCount: Double,
+        failedCount: Double,
+        durationMinutes: Int,
+        processedAtEpochMs: Long,
+        completeNotes: String?,
+        resourceUses: List<ResourceUse>,
+    ): TransformationResult =
+        transaction {
+            val tRow =
+                TransformationsTable
+                    .selectAll()
+                    .where { TransformationsTable.id eq transformationId }
+                    .singleOrNull()
+                    ?: return@transaction TransformationResult.Err("Transformación no encontrada.")
+            if (
+                TransformationProcessingStatus.fromDb(tRow[TransformationsTable.processingStatus]) !=
+                TransformationProcessingStatus.IN_PROGRESS
+            ) {
+                return@transaction TransformationResult.Err(
+                    "Sólo se puede finalizar un proceso que esté en curso.",
+                )
+            }
+
+            val fromStage = ProductStage.fromDb(tRow[TransformationsTable.fromStage])
+            val toStage = ProductStage.fromDb(tRow[TransformationsTable.toStage])
+
+            if (successCount < 0 || failedCount < 0) {
+                return@transaction TransformationResult.Err("Los conteos no pueden ser negativos.")
+            }
+
+            val inputRows =
+                TransformationInputsTable
+                    .selectAll()
+                    .where { TransformationInputsTable.transformationId eq transformationId }
+                    .toList()
+            if (inputRows.isEmpty()) {
+                return@transaction TransformationResult.Err("No hay entradas planeadas para esta transformación.")
+            }
+
+            val drafts =
+                inputRows.mapNotNull { r ->
+                    val pid = r[TransformationInputsTable.sourceProductId] ?: return@mapNotNull null
+                    SourceDraft(pid, r[TransformationInputsTable.quantity])
+                }
+            if (drafts.size != inputRows.size) {
+                return@transaction TransformationResult.Err(
+                    "Faltan referencias a lotes origen; no se puede completar.",
+                )
+            }
+
+            val totalInput = drafts.sumOf { it.quantity }
+            val totalOutput = successCount + failedCount
+            if (kotlin.math.abs(totalInput - totalOutput) > 1e-6) {
+                return@transaction TransformationResult.Err(
+                    "Éxitos + fallados (${fmt(totalOutput)}) debe ser igual " +
+                        "al total planeado (${fmt(totalInput)}).",
+                )
+            }
+
+            val (sources, srcErr) = sourceLotsOrErr(fromStage, drafts)
+            if (srcErr != null) return@transaction TransformationResult.Err(srcErr)
+
+            val now = System.currentTimeMillis()
+            val startNotes = tRow[TransformationsTable.notes]
+            val mergedNotes =
+                listOfNotNull(
+                    startNotes?.trim()?.takeIf { it.isNotEmpty() },
+                    completeNotes?.trim()?.takeIf { it.isNotEmpty() },
+                ).joinToString("\n---\n")
+                    .ifBlank { null }
+
+            val first = sources.first().first
+            val inheritedName = first[ProductsTable.name]
+            val inheritedLine = first[ProductsTable.productLine]
+            val inheritedCatalog = first[ProductsTable.catalogProductId]
+            val inheritedProvider = first[ProductsTable.providerId]
+            val inheritedStandardPrice = first[ProductsTable.standardSalePrice]
+            val inheritedFailedPrice = first[ProductsTable.failedSalePrice]
+            val acqNumerator =
+                sources.sumOf { (row, takeQty) ->
+                    val sid = row[ProductsTable.id]
+                    val tSum = transportCostSumForProduct(sid)
+                    val qLot = row[ProductsTable.quantity]
+                    val landed =
+                        landedAcquisitionPerPole(
+                            row[ProductsTable.acquisitionCostPerPole],
+                            qLot,
+                            tSum,
+                        )
+                    takeQty * landed
+                }
+            val blendedAcq: Double? =
+                if (totalInput > 1e-12 && acqNumerator > 1e-12) acqNumerator / totalInput else null
+
+            sources.forEach { (row, takeQty) ->
+                val sourceId = row[ProductsTable.id]
+                val remaining = row[ProductsTable.quantity] - takeQty
+                if (remaining <= 1e-6) {
+                    ProductsTable.deleteWhere { ProductsTable.id eq sourceId }
+                } else {
+                    ProductsTable.update({ ProductsTable.id eq sourceId }) {
+                        it[ProductsTable.quantity] = remaining
+                    }
+                }
+            }
+
+            var successProductId: Int? = null
+            var failedProductId: Int? = null
+
+            if (successCount > 0.0) {
+                successProductId =
+                    ProductsTable.insert {
+                        it[ProductsTable.name] = inheritedName
+                        it[ProductsTable.productLine] = inheritedLine
+                        it[ProductsTable.stage] = toStage.name
+                        it[ProductsTable.quantity] = successCount
+                        it[ProductsTable.notes] =
+                            "Producto de la transformación #$transformationId " +
+                                "(${fromStage.shortCode} → ${toStage.shortCode})"
+                        it[ProductsTable.createdAtEpochMs] = now
+                        it[ProductsTable.catalogProductId] = inheritedCatalog
+                        it[ProductsTable.providerId] = inheritedProvider
+                        it[ProductsTable.isFailed] = false
+                        it[ProductsTable.failedAtStage] = null
+                        it[ProductsTable.standardSalePrice] = inheritedStandardPrice
+                        it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                        it[ProductsTable.acquisitionCostPerPole] = blendedAcq
+                        it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.FABRICA.name
+                    }[ProductsTable.id]
+            }
+
+            if (failedCount > 0.0) {
+                failedProductId =
+                    ProductsTable.insert {
+                        it[ProductsTable.name] = inheritedName
+                        it[ProductsTable.productLine] = inheritedLine
+                        it[ProductsTable.stage] = fromStage.name
+                        it[ProductsTable.quantity] = failedCount
+                        it[ProductsTable.notes] =
+                            "Fallado durante la transformación #$transformationId en ${fromStage.shortCode}"
+                        it[ProductsTable.createdAtEpochMs] = now
+                        it[ProductsTable.catalogProductId] = inheritedCatalog
+                        it[ProductsTable.providerId] = inheritedProvider
+                        it[ProductsTable.isFailed] = true
+                        it[ProductsTable.failedAtStage] = fromStage.name
+                        it[ProductsTable.standardSalePrice] = inheritedStandardPrice
+                        it[ProductsTable.failedSalePrice] = inheritedFailedPrice
+                        it[ProductsTable.acquisitionCostPerPole] = blendedAcq
+                        it[ProductsTable.acquisitionStorageLocation] = PoleStorageLocation.FABRICA.name
+                    }[ProductsTable.id]
+            }
+
+            val costProductId =
+                successProductId
+                    ?: failedProductId
+                    ?: return@transaction TransformationResult.Err(
+                        "La transformación no produjo ningún lote (éxitos y fallados son cero).",
+                    )
+
+            val resourcesById =
+                ResourcesTable
+                    .selectAll()
+                    .associateBy { it[ResourcesTable.id] }
+
+            resourceUses.forEach { u ->
+                val r = resourcesById[u.resourceId] ?: return@forEach
+                val cpu = r[ResourcesTable.costPerUnit]
+                ProcessCostsTable.insert {
+                    it[ProcessCostsTable.productId] = costProductId
+                    it[ProcessCostsTable.transformationId] = transformationId
+                    it[ProcessCostsTable.fromStage] = fromStage.name
+                    it[ProcessCostsTable.toStage] = toStage.name
+                    it[ProcessCostsTable.resourceId] = u.resourceId
+                    it[ProcessCostsTable.amountUsed] = u.amount
+                    it[ProcessCostsTable.lineCost] = u.amount * cpu
+                    it[ProcessCostsTable.label] = u.label
+                    it[ProcessCostsTable.createdAtEpochMs] = now
+                }
+            }
+
+            TransformationsTable.update({ TransformationsTable.id eq transformationId }) {
+                it[TransformationsTable.processingStatus] =
+                    TransformationProcessingStatus.COMPLETED.name
+                it[TransformationsTable.successCount] = successCount
+                it[TransformationsTable.failedCount] = failedCount
+                it[TransformationsTable.processedAtEpochMs] = processedAtEpochMs
+                it[TransformationsTable.durationMinutes] = durationMinutes
+                it[TransformationsTable.notes] = mergedNotes
+            }
+
+            TransformationResult.Ok(transformationId)
+        }
+
+    /** Descarta un proceso iniciado sin mover inventario. */
+    fun cancelStageProcess(transformationId: Int): TransformationResult =
+        transaction {
+            val tRow =
+                TransformationsTable
+                    .selectAll()
+                    .where { TransformationsTable.id eq transformationId }
+                    .singleOrNull()
+                    ?: return@transaction TransformationResult.Err("Transformación no encontrada.")
+            if (
+                TransformationProcessingStatus.fromDb(tRow[TransformationsTable.processingStatus]) !=
+                TransformationProcessingStatus.IN_PROGRESS
+            ) {
+                return@transaction TransformationResult.Err("Sólo se cancelan procesos en curso.")
+            }
+            TransformationsTable.deleteWhere { TransformationsTable.id eq transformationId }
+            TransformationResult.Ok(transformationId)
+        }
+
+    fun getTransformation(id: Int): Transformation? =
+        transaction {
+            val row =
+                TransformationsTable
+                    .selectAll()
+                    .where { TransformationsTable.id eq id }
+                    .singleOrNull() ?: return@transaction null
+            hydrateTransformationRows(listOf(row)).firstOrNull()
+        }
+
+    fun listInProgressTransformations(fromStage: ProductStage): List<Transformation> =
+        transaction {
+            val trows =
+                TransformationsTable
+                    .selectAll()
+                    .where {
+                        (TransformationsTable.processingStatus eq
+                            TransformationProcessingStatus.IN_PROGRESS.name) and
+                            (TransformationsTable.fromStage eq fromStage.name)
+                    }
+                    .orderBy(
+                        TransformationsTable.startedAtEpochMs to SortOrder.DESC_NULLS_LAST,
+                    )
+                    .toList()
+            hydrateTransformationRows(trows)
+        }
+
     fun listTransformations(limit: Int = 200): List<Transformation> =
         transaction {
             val trows =
@@ -1194,51 +1979,8 @@ class InventoryRepository {
                     .limit(limit)
                     .toList()
             if (trows.isEmpty()) return@transaction emptyList()
-
-            val ids = trows.map { it[TransformationsTable.id] }
-            val inputsByTx =
-                TransformationInputsTable
-                    .selectAll()
-                    .where { TransformationInputsTable.transformationId inList ids }
-                    .groupBy { it[TransformationInputsTable.transformationId] }
-                    .mapValues { (_, rows) ->
-                        rows.map {
-                            TransformationInputView(
-                                id = it[TransformationInputsTable.id],
-                                sourceProductId = it[TransformationInputsTable.sourceProductId],
-                                sourceName = it[TransformationInputsTable.sourceName],
-                                sourceLine = it[TransformationInputsTable.sourceLine],
-                                quantity = it[TransformationInputsTable.quantity],
-                            )
-                        }
-                    }
-
-            val costByTx =
-                ProcessCostsTable
-                    .selectAll()
-                    .where { ProcessCostsTable.transformationId inList ids }
-                    .groupBy { it[ProcessCostsTable.transformationId]!! }
-                    .mapValues { (_, rows) -> rows.sumOf { it[ProcessCostsTable.lineCost] } }
-
-            trows.map { row ->
-                val id = row[TransformationsTable.id]
-                Transformation(
-                    id = id,
-                    fromStage = ProductStage.fromDb(row[TransformationsTable.fromStage]),
-                    toStage = ProductStage.fromDb(row[TransformationsTable.toStage]),
-                    processedAtEpochMs = row[TransformationsTable.processedAtEpochMs],
-                    durationMinutes = row[TransformationsTable.durationMinutes],
-                    successCount = row[TransformationsTable.successCount],
-                    failedCount = row[TransformationsTable.failedCount],
-                    notes = row[TransformationsTable.notes],
-                    createdAtEpochMs = row[TransformationsTable.createdAtEpochMs],
-                    inputs = inputsByTx[id].orEmpty(),
-                    totalCost = costByTx[id] ?: 0.0,
-                )
-            }
+            hydrateTransformationRows(trows)
         }
-
-    private fun fmt(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f".format(v)
 
     /** Etapas donde se puede registrar una falla (antes de TERMINADO). */
     private val failureStages = setOf(ProductStage.CRUDO, ProductStage.DESCORTEZADO, ProductStage.TRATADO)

@@ -20,6 +20,58 @@ data class PoleProvider(
     val createdAtEpochMs: Long,
 )
 
+data class Driver(
+    val id: Int,
+    val name: String,
+    val phone: String?,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+)
+
+enum class ProviderTransportRunStatus {
+    IN_PROGRESS,
+    COMPLETED,
+    CANCELLED,
+    ;
+
+    companion object {
+        fun fromDb(value: String): ProviderTransportRunStatus =
+            entries.firstOrNull { it.name.equals(value.trim(), ignoreCase = true) }
+                ?: IN_PROGRESS
+    }
+}
+
+data class ProviderTransportRunLot(
+    val productId: Int,
+    val productName: String,
+    val quantity: Double,
+)
+
+data class ProviderTransportRun(
+    val id: Int,
+    val driverId: Int,
+    val driverName: String,
+    val vehiclePlate: String,
+    val freightCost: Double,
+    val gruaCost: Double,
+    val departedAtEpochMs: Long,
+    val expectedArrivalEpochMs: Long?,
+    val arrivedAtEpochMs: Long?,
+    val status: ProviderTransportRunStatus,
+    val notes: String?,
+    val createdAtEpochMs: Long,
+    val lots: List<ProviderTransportRunLot>,
+)
+
+/** Datos del envío activo cuando un lote está [PoleStorageLocation.EN_TRANSITO]. */
+data class PoleInboundEta(
+    val transportRunId: Int,
+    val driverName: String,
+    val vehiclePlate: String,
+    val departedAtEpochMs: Long,
+    val expectedArrivalEpochMs: Long?,
+)
+
 data class Client(
     val id: Int,
     val name: String,
@@ -46,7 +98,7 @@ data class Product(
     val failedSalePrice: Double?,
     /** Costo de adquisición por poste (materia prima), si se registró. */
     val acquisitionCostPerPole: Double?,
-    /** Ubicación al registrar el lote (afecta si se usan líneas de traslado). */
+    /** Ubicación física del lote respecto a planta: define desde dónde se cargan traslados y cómo avanzar a Fábrica vía «Traslados». */
     val acquisitionStorageLocation: PoleStorageLocation,
 ) {
     /** Precio de venta aplicable (los fallados usan el precio de saldo). */
@@ -132,11 +184,26 @@ data class ProcessCostLine(
     val createdAtEpochMs: Long,
 )
 
+/** Estado del flujo: proceso declarado vs ya cerrado en inventario. */
+enum class TransformationProcessingStatus {
+    IN_PROGRESS,
+    COMPLETED,
+    ;
+
+    companion object {
+        fun fromDb(value: String?): TransformationProcessingStatus =
+            entries.firstOrNull { it.name.equals(value?.trim(), ignoreCase = true) } ?: COMPLETED
+    }
+}
+
 /** Resumen de una transformación con sus lotes fuente y costo total. */
 data class Transformation(
     val id: Int,
     val fromStage: ProductStage,
     val toStage: ProductStage,
+    val processingStatus: TransformationProcessingStatus,
+    /** Inicio del proceso intermedio (entre etapas); null en registros antiguos. */
+    val startedAtEpochMs: Long?,
     val processedAtEpochMs: Long,
     val durationMinutes: Int,
     val successCount: Double,
@@ -146,7 +213,8 @@ data class Transformation(
     val inputs: List<TransformationInputView>,
     val totalCost: Double,
 ) {
-    val totalInput: Double get() = successCount + failedCount
+    /** Total de postes planeados o tomados de los lotes fuente (siempre coincide con las líneas de entrada). */
+    val totalInput: Double get() = inputs.sumOf { it.quantity }
 }
 
 /** Lote fuente usado en una transformación (snapshot). */
@@ -219,7 +287,9 @@ data class SaleCostPreview(
     val acquisitionTransportTotalForSaleQty: Double,
     val acquisitionTotalForSaleQty: Double,
     val processingTotalForSaleQty: Double,
+    /** Por poste, con margen: `(material + traslado prorrateado + proceso) × (1 + margen %)`. */
     val suggestedUnitPrice: Double,
+    /** Cantidad vendida × precio sugerido por poste; la base del costo incluye traslado prorrateado. */
     val suggestedTotal: Double,
 )
 

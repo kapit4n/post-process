@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Transformation
+import com.inventory.industry.data.TransformationProcessingStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -49,7 +50,8 @@ fun HistoryScreen(repo: InventoryRepository) {
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                "Registro de cada procesamiento: lotes origen, éxitos, fallas, duración y costo de insumos.",
+                "Registro de procesamientos terminados y procesos en curso (entre etapas). " +
+                    "Complete un proceso en «Postes por etapa» para mover inventario.",
                 style = MaterialTheme.typography.bodyMedium,
             )
 
@@ -76,6 +78,7 @@ fun HistoryScreen(repo: InventoryRepository) {
 
 @Composable
 private fun TransformationCard(t: Transformation) {
+    val inProgress = t.processingStatus == TransformationProcessingStatus.IN_PROGRESS
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -86,12 +89,16 @@ private fun TransformationCard(t: Transformation) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    "#${t.id} · ${t.fromStage.shortCode} → ${t.toStage.shortCode}",
+                    "#${t.id} · ${t.fromStage.shortCode} → ${t.toStage.shortCode}" +
+                        if (inProgress) " · En curso" else "",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    color =
+                        if (inProgress) MaterialTheme.colorScheme.tertiary
+                        else MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    formatEpochMs(t.processedAtEpochMs),
+                    formatEpochMs(t.startedAtEpochMs ?: t.processedAtEpochMs),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -100,14 +107,23 @@ private fun TransformationCard(t: Transformation) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Metric("Entrada", formatQty(t.totalInput))
-                Metric("Exitosos", formatQty(t.successCount))
+                Metric(
+                    "Exitosos",
+                    if (inProgress) "—" else formatQty(t.successCount),
+                )
                 Metric(
                     "Fallados",
-                    formatQty(t.failedCount),
-                    error = t.failedCount > 0,
+                    if (inProgress) "—" else formatQty(t.failedCount),
+                    error = !inProgress && t.failedCount > 0,
                 )
-                Metric("Duración", formatDuration(t.durationMinutes))
-                Metric("Costo insumos", formatMoney(t.totalCost))
+                Metric(
+                    "Duración",
+                    if (inProgress) "—" else formatDuration(t.durationMinutes),
+                )
+                Metric(
+                    "Costo insumos",
+                    if (inProgress) "—" else formatMoney(t.totalCost),
+                )
             }
             HorizontalDivider()
             Text("Lotes origen", style = MaterialTheme.typography.labelLarge)

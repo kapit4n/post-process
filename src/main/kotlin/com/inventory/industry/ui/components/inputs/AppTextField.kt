@@ -30,6 +30,8 @@ fun AppTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Applied to the inner [OutlinedTextField] (e.g. click-to-toggle for dropdowns). */
+    textFieldModifier: Modifier = Modifier,
     label: String? = null,
     placeholder: String? = null,
     enabled: Boolean = true,
@@ -73,7 +75,8 @@ fun AppTextField(
                 Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
-                    .animatedBorder(active = focused, shape = shape),
+                    .animatedBorder(active = focused, shape = shape)
+                    .then(textFieldModifier),
             enabled = enabled,
             singleLine = singleLine,
             minLines = minLines,

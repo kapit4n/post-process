@@ -16,6 +16,7 @@ fun AppTextArea(
     minLines: Int = 4,
     maxLines: Int = 12,
     shape: Shape = AppShapes.medium,
+    leadingIcon: (@Composable () -> Unit)? = null,
 ) {
     AppTextField(
         value = value,
@@ -28,5 +29,6 @@ fun AppTextArea(
         minLines = minLines,
         maxLines = maxLines,
         shape = shape,
+        leadingIcon = leadingIcon,
     )
 }

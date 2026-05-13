@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.ui.modifiers.smoothClickable
+import com.inventory.industry.ui.theme.AppElevations
 import com.inventory.industry.ui.theme.AppSpacing
 import com.inventory.industry.ui.theme.AppTypography
 
@@ -52,18 +54,30 @@ fun SidebarItem(
     val scale by
         animateFloatAsState(
             targetValue = if (hovered) 1.04f else 1f,
-            animationSpec = tween(160),
+            animationSpec = tween(200),
             label = "sidebarItemScale",
         )
+    val selectionShadow =
+        if (selected) {
+            Modifier.shadow(
+                elevation = AppElevations.low,
+                shape = PillShape,
+                clip = false,
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+            )
+        } else {
+            Modifier
+        }
     val pillColor by
         animateColorAsState(
             targetValue =
                 when {
-                    selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                    hovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
+                    selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.26f)
+                    hovered -> MaterialTheme.colorScheme.primary.copy(alpha = 0.11f)
                     else -> Color.Transparent
                 },
-            animationSpec = tween(160),
+            animationSpec = tween(200),
             label = "sidebarPill",
         )
     val contentColor by
@@ -81,6 +95,7 @@ fun SidebarItem(
         modifier =
             modifier
                 .fillMaxWidth()
+                .then(selectionShadow)
                 .clip(PillShape)
                 .background(pillColor)
                 .smoothClickable(interactionSource = interactionSource, onClick = onClick)

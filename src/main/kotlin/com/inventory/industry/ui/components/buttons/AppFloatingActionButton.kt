@@ -1,6 +1,7 @@
 package com.inventory.industry.ui.components.buttons
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,6 +58,17 @@ fun AppFloatingActionButton(
             animationSpec = tween(180),
             label = "fabElevation",
         )
+    val scale by
+        animateFloatAsState(
+            targetValue =
+                when {
+                    !enabled -> 1f
+                    hovered -> 1.06f
+                    else -> 1f
+                },
+            animationSpec = tween(180),
+            label = "fabScale",
+        )
     val shadowTint = MaterialTheme.colorScheme.primary.copy(alpha = if (hovered) 0.28f else 0.18f)
     val colorLayer =
         if (gradient != null) {
@@ -66,6 +79,7 @@ fun AppFloatingActionButton(
     Box(
         modifier =
             modifier
+                .scale(scale)
                 .size(size)
                 .shadow(
                     elevation = elevation,

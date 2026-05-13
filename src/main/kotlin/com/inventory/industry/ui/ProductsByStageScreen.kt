@@ -1,39 +1,65 @@
 package com.inventory.industry.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -49,9 +75,34 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.inventory.industry.ui.app.LocalAppMessenger
+import com.inventory.industry.ui.components.buttons.AppButton
+import com.inventory.industry.ui.components.buttons.AppFloatingActionButton
+import com.inventory.industry.ui.components.buttons.AppIconButton
+import com.inventory.industry.ui.components.buttons.AppOutlinedButton
+import com.inventory.industry.ui.components.cards.AppCard
+import com.inventory.industry.ui.components.feedback.StatusChip
+import com.inventory.industry.ui.components.inputs.AppDropdownField
+import com.inventory.industry.ui.components.inputs.AppSearchField
+import com.inventory.industry.ui.layout.SectionContainer
+import com.inventory.industry.ui.models.StatusKind
+import com.inventory.industry.ui.modifiers.smoothClickable
+import com.inventory.industry.ui.modifiers.trackHover
+import com.inventory.industry.ui.navigation.PageHeader
+import com.inventory.industry.ui.theme.AppShapes
+import com.inventory.industry.ui.theme.AppSpacing
+import com.inventory.industry.ui.theme.AppTypography
+import androidx.compose.ui.graphics.Brush
 import com.inventory.industry.data.AcquisitionTransportLineDraft
 import com.inventory.industry.data.CatalogProduct
 import com.inventory.industry.data.InventoryRepository
@@ -71,6 +122,9 @@ import kotlinx.coroutines.withContext
 private val failureRecordStages =
     listOf(ProductStage.CRUDO, ProductStage.DESCORTEZADO, ProductStage.TRATADO)
 
+/** Minimum table width; actual width grows with the viewport up to full content area. */
+private val PostesTableMinWidth = 1080.dp
+
 @Composable
 fun ProductsByStageScreen(repo: InventoryRepository) {
     var tab by remember { mutableStateOf(0) }
@@ -87,7 +141,15 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
     var wipActionError by remember { mutableStateOf<String?>(null) }
     var markFailedTarget by remember { mutableStateOf<Product?>(null) }
     var inboundEta by remember { mutableStateOf<Map<Int, PoleInboundEta>>(emptyMap()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var lineFilter by remember { mutableStateOf("") }
+    var tablePage by remember { mutableStateOf(0) }
+    var rowsPerPage by remember { mutableStateOf(25) }
+    var showHelp by remember { mutableStateOf(false) }
+    var compactToolbar by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val messenger = LocalAppMessenger.current
 
     fun reload() {
         wipActionError = null
@@ -111,6 +173,53 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
         reload()
     }
 
+    LaunchedEffect(stage, searchQuery, lineFilter, rowsPerPage) {
+        tablePage = 0
+    }
+
+    val filteredProducts by remember {
+        derivedStateOf {
+            val q = searchQuery.trim().lowercase()
+            products.filter { p ->
+                val lineOk = lineFilter.isBlank() || p.productLine == lineFilter
+                if (!lineOk) return@filter false
+                if (q.isEmpty()) return@filter true
+                p.name.lowercase().contains(q) ||
+                    p.productLine.lowercase().contains(q) ||
+                    (p.providerName?.lowercase()?.contains(q) == true) ||
+                    p.acquisitionStorageLocation.shortLabel.lowercase().contains(q) ||
+                    (p.notes?.lowercase()?.contains(q) == true)
+            }
+        }
+    }
+
+    val pageCount =
+        remember(filteredProducts.size, rowsPerPage) {
+            val n = filteredProducts.size
+            if (n == 0) 1 else (n + rowsPerPage - 1) / rowsPerPage
+        }
+    LaunchedEffect(tablePage, pageCount) {
+        if (tablePage >= pageCount) {
+            tablePage = (pageCount - 1).coerceAtLeast(0)
+        }
+    }
+
+    val pagedProducts =
+        remember(filteredProducts, tablePage, rowsPerPage) {
+            filteredProducts.drop(tablePage * rowsPerPage).take(rowsPerPage)
+        }
+
+    val lineChoices =
+        remember(products) {
+            listOf("Todas las líneas") + products.map { it.productLine }.distinct().sorted()
+        }
+    val lineDropdownSelected =
+        if (lineFilter.isBlank()) {
+            "Todas las líneas"
+        } else {
+            lineFilter
+        }
+
     val availableForProcess =
         remember(products) {
             products.filter {
@@ -126,198 +235,292 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
             }
         }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    editing = null
-                    showEditor = true
-                },
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Agregar lote")
-            }
-        },
-    ) { padding ->
+    val fabInteraction = remember { MutableInteractionSource() }
+    val fabHovered by fabInteraction.collectIsHoveredAsState()
+    val fabScale by animateFloatAsState(if (fabHovered) 1.06f else 1f, tween(160), label = "fabScale")
+    val primaryGradient =
+        Brush.horizontalGradient(
+            listOf(
+                MaterialTheme.colorScheme.primary,
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+            ),
+        )
+
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.lg),
         ) {
-            Text(
-                "Postes por etapa",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                "Primero «Iniciar proceso»: declara el trabajo entre esta etapa y la siguiente. " +
-                    "Cuando termine, use «Completar» para registrar exitosos y fallados y mover inventario. " +
-                    "«Registrar de una vez» omite el paso intermedio. " +
-                    "Solo los lotes en ubicación Fábrica pueden entrar a proceso. " +
-                    "El costo de adquisición incluye el pago al proveedor por poste más los traslados (predio y viaje cerrado en «Traslados»), repartidos sobre el lote. " +
-                    "Si el material sigue en proveedor o en traslado, use «Traslados» para la ETA y la llegada.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TabRow(selectedTabIndex = tab) {
-                stages.forEachIndexed { index, s ->
-                    Tab(
-                        selected = tab == index,
-                        onClick = { tab = index },
-                        text = { Text(s.shortCode) },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stage.title, style = MaterialTheme.typography.bodyMedium)
-                if (stage.next() != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                startPreselectId = null
-                                showStartProcessDialog = true
-                            },
-                            enabled = canStartOrRegister,
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                            Text(
-                                "  Iniciar proceso → ${stage.next()!!.shortCode}",
+            PageHeader(
+                title = "Postes por etapa",
+                subtitle =
+                    "Flujo de lotes por etapa productiva. Inicie proceso, complete transformaciones o registre de una vez. " +
+                        "Solo lotes en Fábrica pueden avanzar.",
+                actions = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
+                        IconButton(onClick = { showHelp = true }) {
+                            Icon(
+                                Icons.Outlined.HelpOutline,
+                                contentDescription = "Ayuda",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        OutlinedButton(
-                            onClick = { transformTrigger = TransformTrigger(preselectId = null) },
-                            enabled = canStartOrRegister,
-                        ) {
-                            Text("Registrar de una vez")
+                        IconButton(onClick = { compactToolbar = !compactToolbar }) {
+                            Icon(
+                                Icons.Outlined.Settings,
+                                contentDescription = "Vista compacta de filtros",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
-                }
-            }
+                },
+            )
 
-            wipActionError?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-
-            if (wipInStage.isNotEmpty()) {
-                Text(
-                    "Procesos en curso (${stage.shortCode})",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+            SectionContainer(horizontalPadding = 0.dp, verticalPadding = 0.dp) {
+                WorkflowStageTabRow(
+                    selectedIndex = tab,
+                    onSelect = { tab = it },
                 )
-                wipInStage.forEach { w ->
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                    ) {
-                        Column(
-                            Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                "#${w.id} → ${w.toStage.shortCode} · " +
-                                    "${formatQty(w.totalInput)} postes planificados",
-                                fontWeight = FontWeight.Medium,
-                            )
-                            Text(
-                                "Inicio: ${
-                                    formatEpochMs(
-                                        w.startedAtEpochMs ?: w.processedAtEpochMs,
-                                    )
-                                }",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            w.notes?.takeIf { it.isNotBlank() }?.let {
-                                Text(
-                                    it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { completeTarget = w }) {
-                                    Text("Completar (éxitos / fallas)")
-                                }
-                                TextButton(
-                                    onClick = {
-                                        wipActionError = null
-                                        scope.launch {
-                                            val r =
-                                                withContext(Dispatchers.IO) {
-                                                    repo.cancelStageProcess(w.id)
-                                                }
-                                            when (r) {
-                                                is InventoryRepository.TransformationResult.Ok -> {
-                                                    reload()
-                                                }
-                                                is InventoryRepository.TransformationResult.Err -> {
-                                                    wipActionError = r.message
-                                                }
-                                            }
-                                        }
-                                    },
-                                ) {
-                                    Text("Cancelar proceso", color = MaterialTheme.colorScheme.error)
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
-            if (awaitingPlantCount > 0) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors =
-                        CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        ),
+            AppCard(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                enableHoverElevation = false,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(AppSpacing.lg),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
                 ) {
                     Text(
-                        "$awaitingPlantCount lote(s) aún no están en fábrica: la llegada estimada a instalaciones y el cierre del envío se gestionan en «Traslados». " +
-                            "Aquí podrá iniciar proceso cuando el lote figure en ubicación Fábrica (tras registrar la llegada).",
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        text = stage.title,
+                        style = AppTypography.SectionTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+
+                    if (stage.next() != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacing.md),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppButton(
+                                text = "Iniciar proceso → ${stage.next()!!.shortCode}",
+                                onClick = {
+                                    startPreselectId = null
+                                    showStartProcessDialog = true
+                                },
+                                enabled = canStartOrRegister,
+                                gradient = primaryGradient,
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                },
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            AppOutlinedButton(
+                                text = "Registrar de una vez",
+                                onClick = { transformTrigger = TransformTrigger(preselectId = null) },
+                                enabled = canStartOrRegister,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                        }
+                    }
+
+                    wipActionError?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = AppTypography.BodySmall,
+                        )
+                    }
+
+                    if (wipInStage.isNotEmpty()) {
+                        Text(
+                            "Procesos en curso (${stage.shortCode})",
+                            style = AppTypography.CardTitle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        wipInStage.forEach { w ->
+                            AppCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                enableHoverElevation = true,
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(AppSpacing.md),
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                                    StatusChip(
+                                        text = "En proceso · #${w.id} → ${w.toStage.shortCode}",
+                                        kind = StatusKind.Info,
+                                    )
+                                    Text(
+                                        "${formatQty(w.totalInput)} postes planificados · Inicio: " +
+                                            formatEpochMs(w.startedAtEpochMs ?: w.processedAtEpochMs),
+                                        style = AppTypography.BodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    w.notes?.takeIf { it.isNotBlank() }?.let { n ->
+                                        Text(n, style = AppTypography.Caption)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                                        AppButton(
+                                            text = "Completar (éxitos / fallas)",
+                                            onClick = { completeTarget = w },
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
+                                        TextButton(
+                                            onClick = {
+                                                wipActionError = null
+                                                scope.launch {
+                                                    val r =
+                                                        withContext(Dispatchers.IO) {
+                                                            repo.cancelStageProcess(w.id)
+                                                        }
+                                                    when (r) {
+                                                        is InventoryRepository.TransformationResult.Ok -> reload()
+                                                        is InventoryRepository.TransformationResult.Err ->
+                                                            wipActionError = r.message
+                                                    }
+                                                }
+                                            },
+                                        ) {
+                                            Text("Cancelar", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (awaitingPlantCount > 0) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(AppShapes.medium)
+                                    .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f))
+                                    .padding(AppSpacing.md),
+                        ) {
+                            Text(
+                                "$awaitingPlantCount lote(s) aún no están en fábrica. Use «Traslados» para ETA y llegada; " +
+                                    "luego podrá iniciar proceso aquí.",
+                                style = AppTypography.BodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = !compactToolbar) {
+                        PostesInventoryFilterToolbar(
+                            searchQuery = searchQuery,
+                            onSearchChange = { searchQuery = it },
+                            lineChoices = lineChoices,
+                            lineSelected = lineDropdownSelected,
+                            onLineSelected = { choice ->
+                                lineFilter = if (choice == "Todas las líneas") "" else choice
+                            },
+                            onExport = {
+                                val csv = postesInventoryExportCsv(filteredProducts)
+                                clipboard.setText(AnnotatedString(csv))
+                                messenger.showSuccess("Exportación copiada al portapapeles (${filteredProducts.size} filas).")
+                            },
+                            onSettingsToggle = { compactToolbar = true },
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    EnterpriseInventoryTable(
+                        products = pagedProducts,
+                        inboundEta = inboundEta,
+                        showAdvance = stage.next() != null,
+                        onEdit = {
+                            editing = it
+                            showEditor = true
+                        },
+                        onDelete = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { repo.deleteProduct(it.id) }
+                                reload()
+                            }
+                        },
+                        onAdvance = {
+                            startPreselectId = it.id
+                            showStartProcessDialog = true
+                        },
+                        onMarkFailed = { markFailedTarget = it },
+                        onClearFailure = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { repo.clearProductFailure(it.id) }
+                                reload()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+
+                    InventoryTablePaginationFooter(
+                        page = tablePage,
+                        pageCount = pageCount,
+                        rowsPerPage = rowsPerPage,
+                        onRowsPerPageChange = { rowsPerPage = it },
+                        totalItems = filteredProducts.size,
+                        onPrev = { tablePage = (tablePage - 1).coerceAtLeast(0) },
+                        onNext = { tablePage = (tablePage + 1).coerceAtMost(pageCount - 1) },
                     )
                 }
             }
-
-            ProductTable(
-                products = products,
-                inboundEta = inboundEta,
-                showAdvance = stage.next() != null,
-                onEdit = {
-                    editing = it
-                    showEditor = true
-                },
-                onDelete = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { repo.deleteProduct(it.id) }
-                        reload()
-                    }
-                },
-                onAdvance = {
-                    startPreselectId = it.id
-                    showStartProcessDialog = true
-                },
-                onMarkFailed = {
-                    markFailedTarget = it
-                },
-                onClearFailure = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { repo.clearProductFailure(it.id) }
-                        reload()
-                    }
-                },
-            )
         }
+
+        AppFloatingActionButton(
+            onClick = {
+                editing = null
+                showEditor = true
+            },
+            modifier =
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(AppSpacing.xxl)
+                    .scale(fabScale),
+            interactionSource = fabInteraction,
+            gradient = primaryGradient,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            size = 60.dp,
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Nuevo lote", tint = MaterialTheme.colorScheme.onPrimary)
+        }
+    }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("Cómo usar esta vista", style = AppTypography.SectionTitle) },
+            text = {
+                Column(
+                    modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+                ) {
+                    Text(
+                        "«Iniciar proceso» declara el trabajo entre esta etapa y la siguiente. Al terminar, use «Completar» " +
+                            "para registrar exitosos y fallados y mover inventario.",
+                        style = AppTypography.BodySmall,
+                    )
+                    Text(
+                        "«Registrar de una vez» omite el paso intermedio. Solo los lotes en ubicación Fábrica pueden entrar a proceso.",
+                        style = AppTypography.BodySmall,
+                    )
+                    Text(
+                        "El costo de adquisición incluye el pago al proveedor por poste más los traslados " +
+                            "(predio y viaje en «Traslados»), repartidos sobre el lote.",
+                        style = AppTypography.BodySmall,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHelp = false }) { Text("Cerrar") }
+            },
+        )
     }
 
     if (showEditor) {
@@ -420,6 +623,556 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
 
 private data class TransformTrigger(val preselectId: Int?)
 
+private fun csvField(raw: String): String {
+    val needQuote = raw.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+    val escaped = raw.replace("\"", "\"\"")
+    return if (needQuote) "\"$escaped\"" else escaped
+}
+
+private fun postesInventoryExportCsv(products: List<Product>): String =
+    buildString {
+        appendLine("Nombre,Línea,Prov.,Ubic.,Cant.,Precio,Estado,Notas")
+        products.forEach { p ->
+            appendLine(
+                listOf(
+                        csvField(p.name),
+                        csvField(p.productLine),
+                        csvField(p.providerName.orEmpty()),
+                        csvField(p.acquisitionStorageLocation.shortLabel),
+                        csvField(formatQty(p.quantity)),
+                        csvField(p.effectiveSalePrice()?.let { formatMoney(it) }.orEmpty()),
+                        csvField(p.statusLabel()),
+                        csvField(p.notes.orEmpty()),
+                    )
+                    .joinToString(","),
+            )
+        }
+    }
+
+@Composable
+private fun WorkflowStageTabRow(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val stages = ProductStage.entries
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.sm)
+                .animateContentSize(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        stages.forEachIndexed { index, stage ->
+            WorkflowStageTab(
+                stage = stage,
+                selected = index == selectedIndex,
+                onClick = { onSelect(index) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+private fun workflowStageAccent(stage: ProductStage): Color =
+    when (stage) {
+        ProductStage.CRUDO -> Color(0xFF7C3AED)
+        ProductStage.DESCORTEZADO -> Color(0xFF16A34A)
+        ProductStage.TRATADO -> Color(0xFF2563EB)
+        ProductStage.TERMINADO -> Color(0xFFEA580C)
+    }
+
+private fun workflowStageIcon(stage: ProductStage): ImageVector =
+    when (stage) {
+        ProductStage.CRUDO -> Icons.Outlined.Layers
+        ProductStage.DESCORTEZADO -> Icons.Outlined.ContentCut
+        ProductStage.TRATADO -> Icons.Outlined.Science
+        ProductStage.TERMINADO -> Icons.Default.CheckCircle
+    }
+
+@Composable
+private fun WorkflowStageTab(
+    stage: ProductStage,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = workflowStageAccent(stage)
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val surfaceAlpha by
+        animateFloatAsState(
+            targetValue =
+                when {
+                    selected -> 0.14f
+                    hovered -> 0.09f
+                    else -> 0f
+                },
+            animationSpec = tween(180),
+            label = "tabSurface",
+        )
+    val labelColor =
+        if (selected) {
+            accent
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = if (hovered) 0.92f else 0.72f)
+        }
+    val indicatorH by animateDpAsState(if (selected) 3.dp else 0.dp, tween(220), label = "tabInd")
+    Column(
+        modifier =
+            modifier
+                .clip(AppShapes.medium)
+                .background(accent.copy(alpha = surfaceAlpha))
+                .smoothClickable(interactionSource = interaction, onClick = onClick)
+                .padding(vertical = AppSpacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            workflowStageIcon(stage),
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stage.shortCode,
+            style = AppTypography.ButtonText,
+            color = labelColor,
+        )
+        Spacer(Modifier.height(6.dp))
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.md)
+                    .height(3.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(0.58f)
+                    .height(indicatorH)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accent),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PostesInventoryFilterToolbar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    lineChoices: List<String>,
+    lineSelected: String,
+    onLineSelected: (String) -> Unit,
+    onExport: () -> Unit,
+    onSettingsToggle: () -> Unit,
+) {
+    val scroll = rememberScrollState()
+    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(scroll),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.md),
+        ) {
+            AppSearchField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                placeholder = "Buscar nombre, línea, proveedor, ubicación…",
+                modifier = Modifier.widthIn(min = 240.dp, max = 480.dp),
+            )
+            AppDropdownField(
+                label = "Línea",
+                options = lineChoices,
+                selected = lineSelected,
+                onSelected = onLineSelected,
+                modifier = Modifier.widthIn(min = 168.dp, max = 240.dp),
+                placeholder = "Línea…",
+            )
+            AppOutlinedButton(
+                text = "Exportar",
+                onClick = onExport,
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.FileDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+            )
+            AppIconButton(onClick = onSettingsToggle, size = 44.dp) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "Vista compacta de filtros",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.EnterpriseTableHeaderCell(
+    text: String,
+    weight: Float,
+) {
+    Text(
+        text,
+        modifier = Modifier.weight(weight),
+        style = AppTypography.Caption,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun RowScope.EnterpriseTableDataCell(
+    text: String,
+    weight: Float,
+    maxLines: Int = 1,
+    fontWeight: FontWeight = FontWeight.Normal,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    Text(
+        text,
+        modifier = Modifier.weight(weight),
+        style = AppTypography.BodySmall,
+        fontWeight = fontWeight,
+        color = color,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun EnterpriseInventoryTable(
+    products: List<Product>,
+    inboundEta: Map<Int, PoleInboundEta>,
+    showAdvance: Boolean,
+    onEdit: (Product) -> Unit,
+    onDelete: (Product) -> Unit,
+    onAdvance: (Product) -> Unit,
+    onMarkFailed: (Product) -> Unit,
+    onClearFailure: (Product) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val listState = rememberLazyListState()
+    val headerBg = MaterialTheme.colorScheme.surfaceContainerHigh
+    val hScroll = rememberScrollState()
+    BoxWithConstraints(
+        modifier =
+            modifier
+                .clip(AppShapes.large)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                    shape = AppShapes.large,
+                ),
+    ) {
+        val viewport =
+            if (maxWidth.value.isFinite() && maxWidth >= 0.dp) {
+                maxWidth
+            } else {
+                PostesTableMinWidth
+            }
+        val tableWidth = maxOf(PostesTableMinWidth, viewport)
+        Box(Modifier.fillMaxSize().horizontalScroll(hScroll)) {
+            Column(
+                modifier =
+                    Modifier
+                        .width(tableWidth)
+                        .fillMaxHeight(),
+            ) {
+                Column {
+                    Row(
+                        modifier =
+                            Modifier
+                                .width(tableWidth)
+                                .background(headerBg)
+                                .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+                    ) {
+                        EnterpriseTableHeaderCell("Nombre", 1.1f)
+                        EnterpriseTableHeaderCell("Línea", 0.65f)
+                        EnterpriseTableHeaderCell("Prov.", 0.55f)
+                        EnterpriseTableHeaderCell("Ubic.", 0.55f)
+                        EnterpriseTableHeaderCell("Cant.", 0.35f)
+                        EnterpriseTableHeaderCell("Precio", 0.5f)
+                        EnterpriseTableHeaderCell("Estado", 0.65f)
+                        EnterpriseTableHeaderCell("Notas", 0.95f)
+                        EnterpriseTableHeaderCell("Acciones", 1.15f)
+                    }
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    )
+                }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    itemsIndexed(products, key = { _, p -> p.id }) { index, p ->
+                        EnterpriseInventoryTableRow(
+                            index = index,
+                            product = p,
+                            inboundEta = inboundEta[p.id],
+                            showAdvance = showAdvance,
+                            tableWidth = tableWidth,
+                            onEdit = { onEdit(p) },
+                            onDelete = { onDelete(p) },
+                            onAdvance = { onAdvance(p) },
+                            onMarkFailed = { onMarkFailed(p) },
+                            onClearFailure = { onClearFailure(p) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnterpriseInventoryTableRow(
+    index: Int,
+    product: Product,
+    inboundEta: PoleInboundEta?,
+    showAdvance: Boolean,
+    tableWidth: Dp,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onAdvance: () -> Unit,
+    onMarkFailed: () -> Unit,
+    onClearFailure: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val zebra =
+        if (index % 2 == 1) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    val hover = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+    val rowBg by
+        animateColorAsState(
+            targetValue = if (hovered) hover else zebra,
+            animationSpec = tween(140),
+            label = "invRowBg",
+        )
+    val canAdvance =
+        showAdvance &&
+            !product.isFailed &&
+            product.acquisitionStorageLocation == PoleStorageLocation.FABRICA
+    Column(
+        modifier =
+            Modifier
+                .width(tableWidth)
+                .background(rowBg)
+                .trackHover(interaction)
+                .animateContentSize(),
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+        ) {
+            EnterpriseTableDataCell(
+                text = product.name,
+                weight = 1.1f,
+                fontWeight = FontWeight.Medium,
+            )
+            EnterpriseTableDataCell(product.productLine, 0.65f)
+            EnterpriseTableDataCell(product.providerName ?: "—", 0.55f)
+            EnterpriseTableDataCell(
+                text = product.acquisitionStorageLocation.shortLabel,
+                weight = 0.55f,
+                maxLines = 2,
+            )
+            EnterpriseTableDataCell(formatQty(product.quantity), 0.35f)
+            EnterpriseTableDataCell(
+                text = product.effectiveSalePrice()?.let { formatMoney(it) } ?: "—",
+                weight = 0.5f,
+            )
+            Box(Modifier.weight(0.65f), contentAlignment = Alignment.CenterStart) {
+                val chipText: String
+                val chipKind: StatusKind
+                if (product.isFailed) {
+                    chipText =
+                        product.failedAtStage?.shortCode?.let { "Fallado · $it" }
+                            ?: "Fallado"
+                    chipKind = StatusKind.Error
+                } else {
+                    chipText = "OK"
+                    chipKind = StatusKind.Success
+                }
+                StatusChip(text = chipText, kind = chipKind)
+            }
+            EnterpriseTableDataCell(
+                text = product.notes.orEmpty(),
+                weight = 0.95f,
+                maxLines = 2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.weight(1.15f),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIconButton(onClick = onEdit, size = 38.dp) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Editar",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                if (product.stage != ProductStage.TERMINADO && !product.isFailed) {
+                    AppIconButton(
+                        onClick = onMarkFailed,
+                        size = 38.dp,
+                        containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
+                        hoveredColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f),
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = "Marcar fallado",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+                if (product.isFailed) {
+                    AppIconButton(
+                        onClick = onClearFailure,
+                        size = 38.dp,
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Quitar falla",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (canAdvance) {
+                    AppIconButton(
+                        onClick = onAdvance,
+                        size = 38.dp,
+                        containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                        hoveredColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.22f),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Mover etapa",
+                            tint = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                }
+                AppIconButton(
+                    onClick = onDelete,
+                    size = 38.dp,
+                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                    hoveredColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Eliminar",
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+        ProductInboundWorkflowLine(product = product, eta = inboundEta)
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+        )
+    }
+}
+
+@Composable
+private fun InventoryTablePaginationFooter(
+    page: Int,
+    pageCount: Int,
+    rowsPerPage: Int,
+    onRowsPerPageChange: (Int) -> Unit,
+    totalItems: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val pageSizes = listOf(10, 25, 50, 100)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = AppSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text =
+                "$totalItems resultado" + if (totalItems != 1) "s" else "",
+            style = AppTypography.BodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.md),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+            ) {
+                Text(
+                    "Filas / pág.",
+                    style = AppTypography.Caption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AppDropdownField(
+                    label = null,
+                    options = pageSizes,
+                    selected = rowsPerPage,
+                    onSelected = onRowsPerPageChange,
+                    optionLabel = { "$it" },
+                    modifier = Modifier.widthIn(min = 72.dp, max = 96.dp),
+                )
+            }
+            Text(
+                text = "${page + 1} / $pageCount",
+                style = AppTypography.BodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            AppIconButton(onClick = onPrev, enabled = page > 0, size = 40.dp) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Página anterior",
+                    tint =
+                        if (page > 0) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
+                        },
+                )
+            }
+            AppIconButton(onClick = onNext, enabled = page < pageCount - 1, size = 40.dp) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Página siguiente",
+                    tint =
+                        if (page < pageCount - 1) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
+                        },
+                )
+            }
+        }
+    }
+}
+
 private data class TransportLineEditorRow(
     val label: String,
     val costText: String,
@@ -489,143 +1242,6 @@ data class ProductDraft(
     val acquisitionStorageLocation: PoleStorageLocation,
     val transportLines: List<AcquisitionTransportLineDraft>,
 )
-
-@Composable
-private fun ProductTable(
-    products: List<Product>,
-    inboundEta: Map<Int, PoleInboundEta>,
-    showAdvance: Boolean,
-    onEdit: (Product) -> Unit,
-    onDelete: (Product) -> Unit,
-    onAdvance: (Product) -> Unit,
-    onMarkFailed: (Product) -> Unit,
-    onClearFailure: (Product) -> Unit,
-) {
-    Column {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            TableHeaderCell("Nombre", 0.85f)
-            TableHeaderCell("Línea", 0.58f)
-            TableHeaderCell("Prov.", 0.48f)
-            TableHeaderCell("Ubic.", 0.5f)
-            TableHeaderCell("Cant.", 0.3f)
-            TableHeaderCell("Precio", 0.48f)
-            TableHeaderCell("Estado", 0.58f)
-            TableHeaderCell("Notas", 0.75f)
-            TableHeaderCell("Acc.", 0.9f)
-        }
-        HorizontalDivider()
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(products, key = { it.id }) { p ->
-                val canAdvanceThis =
-                    showAdvance &&
-                        !p.isFailed &&
-                        p.acquisitionStorageLocation == PoleStorageLocation.FABRICA
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TableCell(p.name, 0.85f)
-                        TableCell(p.productLine, 0.58f)
-                        Text(
-                            p.providerName ?: "—",
-                            modifier = Modifier.weight(0.48f),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                        )
-                        Text(
-                            p.acquisitionStorageLocation.shortLabel,
-                            modifier = Modifier.weight(0.5f),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 2,
-                        )
-                        TableCell(formatQty(p.quantity), 0.3f)
-                        TableCell(
-                            p.effectiveSalePrice()?.let { formatMoney(it) } ?: "—",
-                            0.48f,
-                        )
-                        val statusColor =
-                            if (p.isFailed) MaterialTheme.colorScheme.error else Color.Unspecified
-                        Text(
-                            p.statusLabel(),
-                            modifier = Modifier.weight(0.58f),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = statusColor,
-                            fontWeight = if (p.isFailed) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                        TableCell(p.notes.orEmpty(), 0.75f)
-                        Row(
-                            modifier = Modifier.weight(0.9f),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            IconButton(onClick = { onEdit(p) }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Editar")
-                            }
-                            if (p.stage != ProductStage.TERMINADO && !p.isFailed) {
-                                IconButton(onClick = { onMarkFailed(p) }) {
-                                    Icon(Icons.Default.Warning, contentDescription = "Marcar fallado")
-                                }
-                            }
-                            if (p.isFailed) {
-                                IconButton(onClick = { onClearFailure(p) }) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = "Quitar falla")
-                                }
-                            }
-                            if (canAdvanceThis) {
-                                IconButton(onClick = { onAdvance(p) }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Procesar este lote",
-                                    )
-                                }
-                            }
-                            IconButton(onClick = { onDelete(p) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Eliminar")
-                            }
-                        }
-                    }
-                    ProductInboundWorkflowLine(
-                        product = p,
-                        eta = inboundEta[p.id],
-                    )
-                }
-                HorizontalDivider()
-            }
-        }
-    }
-}
-
-@Composable
-private fun RowScope.TableHeaderCell(
-    text: String,
-    weight: Float,
-) {
-    Text(
-        text,
-        modifier = Modifier.weight(weight),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-    )
-}
-
-@Composable
-private fun RowScope.TableCell(
-    text: String,
-    weight: Float,
-) {
-    Text(text, modifier = Modifier.weight(weight), style = MaterialTheme.typography.bodyMedium)
-}
 
 @Composable
 private fun ProductEditorDialog(

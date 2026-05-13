@@ -128,7 +128,11 @@ fun AppShell(repo: InventoryRepository) {
                                             ScreenRoute.Providers -> ProvidersScreen(repo)
                                             ScreenRoute.ProviderTransport -> ProviderTransportScreen(repo)
                                             ScreenRoute.Clients -> ClientsScreen(repo)
-                                            ScreenRoute.Sales -> SalesScreen(repo)
+                                            ScreenRoute.Sales ->
+                                                SalesScreen(
+                                                    repo = repo,
+                                                    onNavigate = { navigationState.navigateTo(it) },
+                                                )
                                             ScreenRoute.Accounting -> AccountingScreen(repo)
                                             ScreenRoute.History -> HistoryScreen(repo)
                                         }

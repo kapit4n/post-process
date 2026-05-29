@@ -3,6 +3,7 @@ package com.inventory.industry.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,21 +26,31 @@ import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Transformation
 import com.inventory.industry.data.TransformationProcessingStatus
 import com.inventory.industry.ui.components.feedback.EmptyState
+import com.inventory.industry.ui.components.table.ListPaginationFooter
 import com.inventory.industry.ui.layout.EnterpriseScreenLayout
 import com.inventory.industry.ui.theme.AppSpacing
 import com.inventory.industry.ui.theme.AppTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private val historyPageSizes = listOf(5, 10, 25, 50)
+
 @Composable
 fun HistoryScreen(repo: InventoryRepository) {
     var rows by remember { mutableStateOf<List<Transformation>?>(null) }
+    var page by remember { mutableIntStateOf(0) }
+    var rowsPerPage by remember { mutableIntStateOf(10) }
 
     LaunchedEffect(Unit) {
-        rows = withContext(Dispatchers.IO) { repo.listTransformations() }
+        rows = withContext(Dispatchers.IO) { repo.listTransformations(limit = null) }
+    }
+
+    LaunchedEffect(rowsPerPage) {
+        page = 0
     }
 
     EnterpriseScreenLayout(
+        modifier = Modifier.fillMaxSize(),
         title = "Historial de transformaciones",
         subtitle =
             "Registro de procesamientos terminados y en curso entre etapas. " +
@@ -53,10 +65,43 @@ fun HistoryScreen(repo: InventoryRepository) {
                         message = "Aún no hay transformaciones registradas.",
                     )
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
-                        items(data, key = { it.id }) { t ->
-                            TransformationCard(t)
+                    val pageCount =
+                        remember(data.size, rowsPerPage) {
+                            val n = data.size
+                            if (n == 0) 1 else (n + rowsPerPage - 1) / rowsPerPage
                         }
+                    LaunchedEffect(page, pageCount) {
+                        if (page >= pageCount) {
+                            page = (pageCount - 1).coerceAtLeast(0)
+                        }
+                    }
+                    val paged =
+                        remember(data, page, rowsPerPage) {
+                            data.drop(page * rowsPerPage).take(rowsPerPage)
+                        }
+
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+                        ) {
+                            items(paged, key = { it.id }) { t ->
+                                TransformationCard(t)
+                            }
+                        }
+                        ListPaginationFooter(
+                            page = page,
+                            pageCount = pageCount,
+                            rowsPerPage = rowsPerPage,
+                            onRowsPerPageChange = { rowsPerPage = it },
+                            totalItems = data.size,
+                            onPrev = { page = (page - 1).coerceAtLeast(0) },
+                            onNext = { page = (page + 1).coerceAtMost(pageCount - 1) },
+                            pageSizes = historyPageSizes,
+                        )
                     }
                 }
             }

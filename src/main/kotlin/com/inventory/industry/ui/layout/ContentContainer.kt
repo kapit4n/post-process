@@ -34,7 +34,7 @@ fun ContentContainer(
                 .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         contentAlignment = contentAlignment,
     ) {
-        Box(modifier = widthModifier) {
+        Box(modifier = widthModifier.fillMaxSize()) {
             content()
         }
     }

@@ -2031,14 +2031,13 @@ class InventoryRepository {
             hydrateTransformationRows(trows)
         }
 
-    fun listTransformations(limit: Int = 200): List<Transformation> =
+    fun listTransformations(limit: Int? = 200): List<Transformation> =
         transaction {
-            val trows =
+            val query =
                 TransformationsTable
                     .selectAll()
                     .orderBy(TransformationsTable.processedAtEpochMs to SortOrder.DESC)
-                    .limit(limit)
-                    .toList()
+            val trows = if (limit != null) query.limit(limit).toList() else query.toList()
             if (trows.isEmpty()) return@transaction emptyList()
             hydrateTransformationRows(trows)
         }

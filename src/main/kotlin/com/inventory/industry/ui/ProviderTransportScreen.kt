@@ -1,17 +1,9 @@
 package com.inventory.industry.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -47,7 +39,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,8 +73,11 @@ import com.inventory.industry.ui.components.dashboard.monthDeltaColor
 import com.inventory.industry.ui.components.dashboard.monthDeltaLabel
 import com.inventory.industry.ui.components.dashboard.StatusDotBadge
 import com.inventory.industry.ui.components.dashboard.SummaryLine
-import com.inventory.industry.ui.components.dashboard.WizardStepper
+import com.inventory.industry.ui.components.dashboard.WizardWorkflowCard
 import com.inventory.industry.ui.components.dashboard.statusKindColor
+import com.inventory.industry.ui.components.dialogs.DriverEditorDialog
+import com.inventory.industry.ui.layout.TwoPaneWorkflowLayout
+import com.inventory.industry.ui.utils.currentMonthEpochRange
 import com.inventory.industry.ui.components.feedback.EmptyState
 import com.inventory.industry.ui.components.feedback.StatusChip
 import com.inventory.industry.ui.components.inputs.AppNumberField
@@ -100,8 +94,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
 
 private val WIZARD_STEPS = listOf(
     "Seleccionar Chofer",
@@ -315,11 +307,12 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
         }
 
         // ---- 2 + 3 + 7 + 10. Wizard (left) + live summary (right) --------------
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val stacked = maxWidth < 980.dp
-            val workflow: @Composable (Modifier) -> Unit = { mod ->
-                WorkflowCard(
+        TwoPaneWorkflowLayout(
+            main = { mod ->
+                WizardWorkflowCard(
                     modifier = mod,
+                    title = "Nuevo traslado",
+                    steps = WIZARD_STEPS,
                     currentStep = currentStep,
                     onStepClick = { currentStep = it },
                     onBack = { if (currentStep > 0) currentStep-- },
@@ -331,8 +324,9 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
                             errorMsg = stepError(currentStep)
                         }
                     },
-                ) {
-                    when (currentStep) {
+                    contentLabel = "transportWizard",
+                ) { step ->
+                    when (step) {
                         0 ->
                             StepDrivers(
                                 drivers = drivers,
@@ -393,8 +387,8 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
                             )
                     }
                 }
-            }
-            val summary: @Composable (Modifier) -> Unit = { mod ->
+            },
+            side = { mod ->
                 Column(modifier = mod, verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
                     TransferSummaryCard(
                         driver = selectedDriver,
@@ -414,24 +408,8 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
                         onStart = { startTransfer() },
                     )
                 }
-            }
-
-            if (stacked) {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.lg)) {
-                    workflow(Modifier.fillMaxWidth())
-                    summary(Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.lg),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    workflow(Modifier.weight(1.5f))
-                    summary(Modifier.weight(1f))
-                }
-            }
-        }
+            },
+        )
 
         // ---- 8. Shipment history timeline --------------------------------------
         SectionCard(
@@ -542,17 +520,13 @@ private data class TransportKpis(
 )
 
 private fun computeTransportKpis(runs: List<ProviderTransportRun>): TransportKpis {
-    val zone = ZoneId.systemDefault()
-    val firstOfMonth = LocalDate.now().withDayOfMonth(1)
-    val startThisMonth = firstOfMonth.atStartOfDay(zone).toInstant().toEpochMilli()
-    val startNextMonth = firstOfMonth.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    val startPrevMonth = firstOfMonth.minusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    val range = currentMonthEpochRange()
 
     fun runEpoch(r: ProviderTransportRun): Long =
         r.departedAtEpochMs.takeIf { it > 0 } ?: r.createdAtEpochMs
 
-    val thisMonth = runs.filter { val e = runEpoch(it); e in startThisMonth until startNextMonth }
-    val prevMonth = runs.filter { val e = runEpoch(it); e in startPrevMonth until startThisMonth }
+    val thisMonth = runs.filter { runEpoch(it) in range.thisMonthRange }
+    val prevMonth = runs.filter { runEpoch(it) in range.prevMonthRange }
 
     return TransportKpis(
         monthCount = thisMonth.size,
@@ -562,66 +536,6 @@ private fun computeTransportKpis(runs: List<ProviderTransportRun>): TransportKpi
         costMonth = thisMonth.sumOf { it.freightCost + it.gruaCost },
         lotsMonth = thisMonth.sumOf { it.lots.size },
     )
-}
-
-// =====================================================================================
-// Workflow shell + stepper
-// =====================================================================================
-
-@Composable
-private fun WorkflowCard(
-    currentStep: Int,
-    onStepClick: (Int) -> Unit,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    SectionCard(
-        modifier = modifier,
-        title = "Nuevo traslado",
-        subtitle = WIZARD_STEPS[currentStep],
-    ) {
-        WizardStepper(steps = WIZARD_STEPS, currentStep = currentStep, onStepClick = onStepClick)
-        LinearProgressIndicator(
-            progress = { (currentStep + 1) / WIZARD_STEPS.size.toFloat() },
-            modifier = Modifier.fillMaxWidth().clip(AppShapes.small),
-        )
-        AnimatedContent(
-            targetState = currentStep,
-            transitionSpec = {
-                if (targetState >= initialState) {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 6 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { -it / 6 })
-                } else {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { -it / 6 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { it / 6 })
-                }
-            },
-            label = "wizardStep",
-        ) { _ ->
-            Box(modifier = Modifier.fillMaxWidth()) { content() }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-        ) {
-            AppOutlinedButton(
-                text = "Atrás",
-                onClick = onBack,
-                enabled = currentStep > 0,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            if (currentStep < WIZARD_STEPS.lastIndex) {
-                AppButton(
-                    text = "Siguiente",
-                    onClick = onNext,
-                    trailingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                )
-            }
-        }
-    }
 }
 
 // =====================================================================================
@@ -1240,41 +1154,3 @@ private fun badgeFor(status: ProviderTransportRunStatus): BadgeSpec =
         ProviderTransportRunStatus.CANCELLED -> BadgeSpec("Cancelado", StatusKind.Error)
     }
 
-// =====================================================================================
-// Driver editor dialog
-// =====================================================================================
-
-@Composable
-private fun DriverEditorDialog(
-    initial: Driver?,
-    onDismiss: () -> Unit,
-    onSave: (id: Int?, name: String, phone: String?, notes: String?) -> Unit,
-) {
-    var name by remember { mutableStateOf(initial?.name ?: "") }
-    var phone by remember { mutableStateOf(initial?.phone.orEmpty()) }
-    var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Nuevo chofer" else "Editar chofer") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
-                AppTextField(value = name, onValueChange = { name = it }, label = "Nombre", modifier = Modifier.fillMaxWidth())
-                AppTextField(value = phone, onValueChange = { phone = it }, label = "Teléfono (opcional)", modifier = Modifier.fillMaxWidth())
-                AppTextField(value = notes, onValueChange = { notes = it }, label = "Notas", modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        onSave(initial?.id, name.trim(), phone.trim().ifBlank { null }, notes.trim().ifBlank { null })
-                    }
-                },
-                enabled = name.isNotBlank(),
-            ) { Text("Guardar") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        },
-    )
-}

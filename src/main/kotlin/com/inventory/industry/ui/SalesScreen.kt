@@ -1,16 +1,8 @@
 package com.inventory.industry.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,8 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.Add
@@ -42,7 +32,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,8 +63,11 @@ import com.inventory.industry.ui.components.dashboard.KpiCard
 import com.inventory.industry.ui.components.dashboard.SelectableCard
 import com.inventory.industry.ui.components.dashboard.StatusDotBadge
 import com.inventory.industry.ui.components.dashboard.SummaryLine
-import com.inventory.industry.ui.components.dashboard.WizardStepper
+import com.inventory.industry.ui.components.dashboard.WizardWorkflowCard
 import com.inventory.industry.ui.components.dashboard.monthDeltaColor
+import com.inventory.industry.ui.components.dialogs.ClientEditorDialog
+import com.inventory.industry.ui.layout.TwoPaneWorkflowLayout
+import com.inventory.industry.ui.utils.currentMonthEpochRange
 import com.inventory.industry.ui.components.dashboard.monthDeltaLabel
 import com.inventory.industry.ui.components.feedback.EmptyState
 import com.inventory.industry.ui.components.inputs.AppNumberField
@@ -92,8 +84,6 @@ import com.inventory.industry.ui.theme.AppTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.ZoneId
 
 private val SALES_STEPS = listOf(
     "Datos de la venta",
@@ -306,11 +296,13 @@ fun SalesScreen(
         }
 
         // ---- 2 + 3 + 8 + 9. Wizard (left) + live summary (right) --------------
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val stacked = maxWidth < 980.dp
-            val workflow: @Composable (Modifier) -> Unit = { mod ->
-                SalesWorkflowCard(
+        TwoPaneWorkflowLayout(
+            mainWeight = 1.7f,
+            main = { mod ->
+                WizardWorkflowCard(
                     modifier = mod,
+                    title = "Registrar venta",
+                    steps = SALES_STEPS,
                     currentStep = currentStep,
                     onStepClick = { currentStep = it },
                     onBack = { if (currentStep > 0) currentStep-- },
@@ -322,6 +314,7 @@ fun SalesScreen(
                             error = stepError(currentStep)
                         }
                     },
+                    contentLabel = "salesWizard",
                 ) { step ->
                     when (step) {
                         0 ->
@@ -375,8 +368,8 @@ fun SalesScreen(
                             )
                     }
                 }
-            }
-            val summary: @Composable (Modifier) -> Unit = { mod ->
+            },
+            side = { mod ->
                 Column(modifier = mod, verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
                     SalesSummaryCard(
                         client = selectedClient,
@@ -402,24 +395,8 @@ fun SalesScreen(
                         },
                     )
                 }
-            }
-
-            if (stacked) {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.lg)) {
-                    workflow(Modifier.fillMaxWidth())
-                    summary(Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.lg),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    workflow(Modifier.weight(1.7f))
-                    summary(Modifier.weight(1f))
-                }
-            }
-        }
+            },
+        )
 
         // ---- 10. Recent sales grid --------------------------------------------
         SectionCard(
@@ -453,7 +430,7 @@ fun SalesScreen(
     if (creatingClient) {
         ClientEditorDialog(
             onDismiss = { creatingClient = false },
-            onSave = { name, contact, notes ->
+            onSave = { _, name, contact, notes ->
                 scope.launch {
                     val newId = withContext(Dispatchers.IO) { repo.upsertClient(null, name, contact, notes) }
                     creatingClient = false
@@ -575,14 +552,9 @@ private data class SalesKpis(
 )
 
 private fun computeSalesKpis(recent: List<SaleRecord>, sellable: List<Product>): SalesKpis {
-    val zone = ZoneId.systemDefault()
-    val firstOfMonth = LocalDate.now().withDayOfMonth(1)
-    val startThisMonth = firstOfMonth.atStartOfDay(zone).toInstant().toEpochMilli()
-    val startNextMonth = firstOfMonth.plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    val startPrevMonth = firstOfMonth.minusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()
-
-    val thisMonth = recent.filter { it.soldAtEpochMs in startThisMonth until startNextMonth }
-    val prevMonth = recent.filter { it.soldAtEpochMs in startPrevMonth until startThisMonth }
+    val range = currentMonthEpochRange()
+    val thisMonth = recent.filter { it.soldAtEpochMs in range.thisMonthRange }
+    val prevMonth = recent.filter { it.soldAtEpochMs in range.prevMonthRange }
 
     fun isOk(s: SaleRecord) = s.toLedgerStatus() == SaleLedgerStatus.CompletedOk
 
@@ -595,66 +567,6 @@ private fun computeSalesKpis(recent: List<SaleRecord>, sellable: List<Product>):
         billedMonth = thisMonth.sumOf { it.totalAmount },
         polesMonth = thisMonth.sumOf { it.quantitySold },
     )
-}
-
-// =====================================================================================
-// Workflow shell
-// =====================================================================================
-
-@Composable
-private fun SalesWorkflowCard(
-    currentStep: Int,
-    onStepClick: (Int) -> Unit,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable (Int) -> Unit,
-) {
-    SectionCard(
-        modifier = modifier,
-        title = "Registrar venta",
-        subtitle = SALES_STEPS[currentStep],
-    ) {
-        WizardStepper(steps = SALES_STEPS, currentStep = currentStep, onStepClick = onStepClick)
-        LinearProgressIndicator(
-            progress = { (currentStep + 1) / SALES_STEPS.size.toFloat() },
-            modifier = Modifier.fillMaxWidth().clip(AppShapes.small),
-        )
-        AnimatedContent(
-            targetState = currentStep,
-            transitionSpec = {
-                if (targetState >= initialState) {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { it / 6 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { -it / 6 })
-                } else {
-                    (fadeIn(tween(220)) + slideInHorizontally(tween(220)) { -it / 6 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally(tween(150)) { it / 6 })
-                }
-            },
-            label = "salesStep",
-        ) { step ->
-            Box(modifier = Modifier.fillMaxWidth()) { content(step) }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-        ) {
-            AppOutlinedButton(
-                text = "Atrás",
-                onClick = onBack,
-                enabled = currentStep > 0,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            if (currentStep < SALES_STEPS.lastIndex) {
-                AppButton(
-                    text = "Siguiente",
-                    onClick = onNext,
-                    trailingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                )
-            }
-        }
-    }
 }
 
 // =====================================================================================
@@ -1293,34 +1205,3 @@ private fun SaleDetailDialog(
     )
 }
 
-// =====================================================================================
-// Quick add client dialog
-// =====================================================================================
-
-@Composable
-private fun ClientEditorDialog(
-    onDismiss: () -> Unit,
-    onSave: (name: String, contact: String?, notes: String?) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var contact by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Nuevo cliente") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
-                AppTextField(value = name, onValueChange = { name = it }, label = "Nombre", modifier = Modifier.fillMaxWidth())
-                AppTextField(value = contact, onValueChange = { contact = it }, label = "Contacto (opcional)", modifier = Modifier.fillMaxWidth())
-                AppTextField(value = notes, onValueChange = { notes = it }, label = "Notas (opcional)", modifier = Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { if (name.isNotBlank()) onSave(name.trim(), contact.trim().ifBlank { null }, notes.trim().ifBlank { null }) },
-                enabled = name.isNotBlank(),
-            ) { Text("Guardar") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
-}

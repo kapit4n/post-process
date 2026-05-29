@@ -1,17 +1,14 @@
 package com.inventory.industry.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -23,11 +20,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.Client
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.ui.components.buttons.AppButton
-import com.inventory.industry.ui.components.inputs.AppTextField
+import com.inventory.industry.ui.components.dialogs.ClientEditorDialog
 import com.inventory.industry.ui.components.table.AppDataTable
 import com.inventory.industry.ui.components.table.AppTableColumn
 import com.inventory.industry.ui.layout.EnterpriseScreenLayout
@@ -159,54 +155,4 @@ fun ClientsScreen(repo: InventoryRepository) {
             },
         )
     }
-}
-
-@Composable
-private fun ClientEditorDialog(
-    initial: Client?,
-    onDismiss: () -> Unit,
-    onSave: (id: Int?, name: String, contact: String?, notes: String?) -> Unit,
-) {
-    var name by remember { mutableStateOf(initial?.name.orEmpty()) }
-    var contact by remember { mutableStateOf(initial?.contact.orEmpty()) }
-    var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Nuevo cliente" else "Editar cliente") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppTextField(value = name, onValueChange = { name = it }, label = "Nombre")
-                AppTextField(
-                    value = contact,
-                    onValueChange = { contact = it },
-                    label = "Contacto (tel., correo…)",
-                )
-                AppTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = "Notas (opcional)",
-                    maxLines = 4,
-                    singleLine = false,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(
-                        initial?.id,
-                        name.trim(),
-                        contact.trim().ifBlank { null },
-                        notes.trim().ifBlank { null },
-                    )
-                },
-            ) {
-                Text("Guardar")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancelar") }
-        },
-    )
 }

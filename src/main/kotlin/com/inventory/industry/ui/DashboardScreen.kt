@@ -94,7 +94,7 @@ fun DashboardScreen(
             flow = repo.inventoryFlowSummary()
             productCount = repo.listProducts().size
             failedCount = repo.failedProductCount()
-            activity = repo.recentDashboardActivity(18)
+            activity = repo.recentDashboardActivity(5)
             val today = LocalDate.now()
             salesTrend = repo.salesAggregatedDaily(today.year, today.monthValue)
             totalCost = repo.totalProcessCost()

@@ -26,6 +26,7 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.47.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
+    implementation("org.apache.pdfbox:pdfbox:2.0.31")
 }
 
 compose.desktop {

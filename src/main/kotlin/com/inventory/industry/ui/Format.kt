@@ -8,11 +8,16 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val TIME_ONLY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val ZONE: ZoneId = ZoneId.systemDefault()
 
 /** Epoch ms → "yyyy-MM-dd HH:mm" en la zona local. */
 fun formatEpochMs(epochMs: Long): String =
     LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMs), ZONE).format(DATE_TIME_FMT)
+
+/** Hora local compacta para feeds del panel. */
+fun formatEpochTimeShort(epochMs: Long): String =
+    LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMs), ZONE).format(TIME_ONLY_FMT)
 
 /** "yyyy-MM-dd HH:mm" → epoch ms; null si no parsea. */
 fun parseDateTime(input: String): Long? {

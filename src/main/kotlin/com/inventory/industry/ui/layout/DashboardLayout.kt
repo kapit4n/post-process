@@ -5,27 +5,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import com.inventory.industry.ui.theme.AppSpacing
 
+/** Contenedor del panel sin scroll global: el contenido usa weight y scroll interno por pestaña. */
 @Composable
 fun DashboardLayout(
     @Suppress("UNUSED_PARAMETER") windowSize: WindowSize,
     modifier: Modifier = Modifier,
-    verticalSpacing: Dp = AppSpacing.lg,
+    verticalSpacing: Dp = AppSpacing.sm,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val scroll = rememberScrollState()
     Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(scroll)
-                .fillMaxWidth(),
+        modifier = modifier.fillMaxSize().fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         content = content,
     )

@@ -12,6 +12,8 @@ import java.util.Locale
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.deleteWhere
@@ -708,6 +710,31 @@ class InventoryRepository {
         transaction {
             (SalesTable innerJoin ClientsTable)
                 .selectAll()
+                .orderBy(SalesTable.soldAtEpochMs to SortOrder.DESC)
+                .map { it.toSaleRecord() }
+        }
+
+    /** Ventas en [fromEpochMs, toEpochMsExclusive); null en un extremo = sin límite en ese lado. */
+    fun listSalesInRange(
+        fromEpochMs: Long?,
+        toEpochMsExclusive: Long?,
+    ): List<SaleRecord> =
+        transaction {
+            val query = (SalesTable innerJoin ClientsTable).selectAll()
+            val filtered =
+                when {
+                    fromEpochMs == null && toEpochMsExclusive == null -> query
+                    fromEpochMs != null && toEpochMsExclusive != null ->
+                        query.where {
+                            (SalesTable.soldAtEpochMs greaterEq fromEpochMs) and
+                                (SalesTable.soldAtEpochMs less toEpochMsExclusive)
+                        }
+                    fromEpochMs != null ->
+                        query.where { SalesTable.soldAtEpochMs greaterEq fromEpochMs }
+                    else ->
+                        query.where { SalesTable.soldAtEpochMs less toEpochMsExclusive!! }
+                }
+            filtered
                 .orderBy(SalesTable.soldAtEpochMs to SortOrder.DESC)
                 .map { it.toSaleRecord() }
         }

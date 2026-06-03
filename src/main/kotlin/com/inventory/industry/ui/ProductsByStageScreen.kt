@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
@@ -116,6 +117,11 @@ import com.inventory.industry.data.Transformation
 import com.inventory.industry.data.TransformationProcessingStatus
 import com.inventory.industry.domain.PoleStorageLocation
 import com.inventory.industry.domain.ProductStage
+import com.inventory.industry.reports.PdfSaveDialog
+import com.inventory.industry.reports.StagesDetailPdfGenerator
+import com.inventory.industry.reports.buildStagesDetailReport
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -148,9 +154,40 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
     var rowsPerPage by remember { mutableStateOf(25) }
     var showHelp by remember { mutableStateOf(false) }
     var compactToolbar by remember { mutableStateOf(false) }
+    var pdfExporting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val messenger = LocalAppMessenger.current
+
+    fun exportStagesPdf() {
+        if (pdfExporting) return
+        pdfExporting = true
+        scope.launch {
+            try {
+                val report = withContext(Dispatchers.IO) { buildStagesDetailReport(repo) }
+                val bytes =
+                    withContext(Dispatchers.IO) {
+                        StagesDetailPdfGenerator.generate(report)
+                    }
+                val defaultName =
+                    "reporte-por-etapa-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf"
+                val target =
+                    withContext(Dispatchers.Main) {
+                        PdfSaveDialog.chooseSaveFile(defaultName)
+                    }
+                if (target != null) {
+                    withContext(Dispatchers.IO) { target.writeBytes(bytes) }
+                    messenger.showSuccess("PDF guardado: ${target.name}")
+                }
+            } catch (e: Exception) {
+                messenger.showError(
+                    "No se pudo generar el PDF: ${e.message ?: "error desconocido"}",
+                )
+            } finally {
+                pdfExporting = false
+            }
+        }
+    }
 
     fun reload() {
         wipActionError = null
@@ -259,6 +296,16 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                         "Solo lotes en Fábrica pueden avanzar.",
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
+                        IconButton(
+                            onClick = { exportStagesPdf() },
+                            enabled = !pdfExporting,
+                        ) {
+                            Icon(
+                                Icons.Outlined.PictureAsPdf,
+                                contentDescription = "Exportar reporte PDF por etapa",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                         IconButton(onClick = { showHelp = true }) {
                             Icon(
                                 Icons.Outlined.HelpOutline,

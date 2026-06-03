@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Percent
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -74,8 +75,17 @@ import com.inventory.industry.ui.components.inputs.AppNumberField
 import com.inventory.industry.ui.components.inputs.AppSearchField
 import com.inventory.industry.ui.components.inputs.AppTextArea
 import com.inventory.industry.ui.components.inputs.AppTextField
+import com.inventory.industry.reports.PdfSaveDialog
+import com.inventory.industry.reports.SalesDetailPdfGenerator
+import com.inventory.industry.reports.SalesReportRange
+import com.inventory.industry.reports.SalesReportRangeResolver
+import com.inventory.industry.reports.buildSalesDetailReport
+import com.inventory.industry.ui.app.LocalAppMessenger
 import com.inventory.industry.ui.components.sales.SaleLedgerStatus
+import com.inventory.industry.ui.components.sales.SalesReportRangeDialog
 import com.inventory.industry.ui.components.sales.toLedgerStatus
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import com.inventory.industry.ui.navigation.ScreenRoute
 import com.inventory.industry.ui.theme.AppShapes
 import com.inventory.industry.ui.theme.AppSpacing
@@ -116,6 +126,9 @@ fun SalesScreen(
     var formResetNonce by remember { mutableStateOf(0) }
     var suggestLoading by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
+    var showSalesReportDialog by remember { mutableStateOf(false) }
+    var salesPdfExporting by remember { mutableStateOf(false) }
+    val messenger = LocalAppMessenger.current
 
     var currentStep by remember { mutableStateOf(0) }
     var clientQuery by remember { mutableStateOf("") }
@@ -230,13 +243,34 @@ fun SalesScreen(
             .padding(bottom = AppSpacing.xl),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.lg),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
-            Text("Ventas", style = AppTypography.PageTitle, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-                "Registre ventas de postes terminados (OK) o lotes fallados a precio de saldo. El precio sugerido " +
-                    "aplica el % de ganancia sobre el costo por poste (material, traslado prorrateado y procesamiento).",
-                style = AppTypography.BodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+            ) {
+                Text("Ventas", style = AppTypography.PageTitle, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "Registre ventas de postes terminados (OK) o lotes fallados a precio de saldo. El precio sugerido " +
+                        "aplica el % de ganancia sobre el costo por poste (material, traslado prorrateado y procesamiento).",
+                    style = AppTypography.BodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            AppOutlinedButton(
+                text = if (salesPdfExporting) "Generando PDF…" else "Reporte PDF",
+                onClick = { showSalesReportDialog = true },
+                enabled = !salesPdfExporting,
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.PictureAsPdf,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
             )
         }
 
@@ -532,6 +566,51 @@ fun SalesScreen(
             },
             dismissButton = {
                 TextButton(enabled = !submitting, onClick = { showSaleConfirmDialog = false }) { Text("Cancelar") }
+            },
+        )
+    }
+
+    if (showSalesReportDialog) {
+        SalesReportRangeDialog(
+            exporting = salesPdfExporting,
+            onDismiss = { if (!salesPdfExporting) showSalesReportDialog = false },
+            onGenerate = { range, customFrom, customTo ->
+                showSalesReportDialog = false
+                salesPdfExporting = true
+                scope.launch {
+                    try {
+                        val epochRange =
+                            SalesReportRangeResolver.resolve(range, customFrom, customTo)
+                        val report =
+                            withContext(Dispatchers.IO) {
+                                buildSalesDetailReport(repo, epochRange)
+                            }
+                        val bytes =
+                            withContext(Dispatchers.IO) {
+                                SalesDetailPdfGenerator.generate(report)
+                            }
+                        val slug =
+                            range.name.lowercase().replace('_', '-')
+                        val defaultName =
+                            "reporte-ventas-$slug-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf"
+                        val target =
+                            withContext(Dispatchers.Main) {
+                                PdfSaveDialog.chooseSaveFile(defaultName)
+                            }
+                        if (target != null) {
+                            withContext(Dispatchers.IO) { target.writeBytes(bytes) }
+                            messenger.showSuccess(
+                                "PDF guardado (${report.saleCount} ventas): ${target.name}",
+                            )
+                        }
+                    } catch (e: Exception) {
+                        messenger.showError(
+                            "No se pudo generar el PDF: ${e.message ?: "error desconocido"}",
+                        )
+                    } finally {
+                        salesPdfExporting = false
+                    }
+                }
             },
         )
     }

@@ -11,5 +11,3 @@ Gestión de transporte de lotes desde el proveedor hasta la fábrica con conduct
 - Seguimiento de estados: en tránsito, completado, cancelado
 - Historial de corridas con indicadores visuales
 - KPIs: traslados del mes, en tránsito, completados, costo total
-
-![Traslados](traslados.png)

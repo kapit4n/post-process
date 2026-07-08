@@ -7,5 +7,3 @@ Plantillas de consumo de insumos que definen los recursos necesarios por poste e
 - Orden de visualización y notas por línea de receta
 - Al ejecutar una transformación, el sistema sugiere las cantidades según la receta activa
 - Recetas predeterminadas cargadas en la primera ejecución
-
-![Recetas](recetas.png)

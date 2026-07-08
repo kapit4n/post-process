@@ -9,5 +9,3 @@ Auditoría y registro de todas las transformaciones de lotes entre etapas de pro
 - Duración del proceso y costo total de insumos
 - Notas por transformación
 - Paginación con opciones de 5, 10, 25 o 50 registros
-
-![Historial](historial.png)

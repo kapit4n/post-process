@@ -10,5 +10,4 @@ Pantalla principal de operaciones diarias con inventario organizado por etapa de
 - Marcar lotes como fallados o revertir fallo
 - Búsqueda, filtro por línea de producto y paginación
 - Exportar inventario filtrado a CSV
-
-![Por etapa](por-etapa.png)
+- Diálogo de ayuda integrado con el flujo de trabajo

@@ -12,5 +12,3 @@ Registro comercial de salida de stock con cálculo de costos y márgenes.
 **Indicadores:**
 - Ventas del mes, terminadas OK, por vender, total facturado, postes vendidos
 - Historial de ventas recientes en la misma pantalla
-
-![Ventas](ventas.png)

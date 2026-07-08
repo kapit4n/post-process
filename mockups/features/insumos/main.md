@@ -10,5 +10,3 @@ Gestión de materiales e insumos de procesamiento con dos pestañas: catálogo e
 - CRUD de partidas de stock (cantidad, precio de adquisición, fecha de vencimiento, notas)
 - Estimación del valor total del inventario
 - Datos de demostración generados automáticamente
-
-![Insumos](insumos.png)

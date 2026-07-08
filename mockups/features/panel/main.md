@@ -9,5 +9,3 @@ Resumen operativo del negocio en un solo vistazo con KPIs, gráficos y actividad
 - Línea de tendencia de ventas del mes en curso
 - Actividad reciente con línea de tiempo de ventas, transformaciones y traslados
 - Accesos rápidos a otras pantallas del sistema
-
-![Panel](panel.png)

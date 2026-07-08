@@ -10,5 +10,3 @@ Visión financiera agregada con resumen de costos y agregación por período.
 **Agregación de ventas:**
 - Por día, mes o año: importe total, postes vendidos, número de operaciones
 - Filtros por año y mes
-
-![Contabilidad](contabilidad.png)

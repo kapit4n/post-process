@@ -66,3 +66,6 @@ Thumbs.db
 *.db-journal
 *.sqlite
 *.sqlite3
+
+docs/node_modules/
+docs/node_modules/

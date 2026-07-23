@@ -293,7 +293,7 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
                 icon = Icons.Filled.Payments,
                 accent = semantic.info,
                 label = "Costo total",
-                value = "Bs ${formatMoney(kpis.costMonth)}",
+                value = formatMoneyBs(kpis.costMonth),
                 subtitle = "Transporte + grúa (mes)",
             )
             KpiCard(
@@ -893,8 +893,8 @@ private fun StepConfirm(
         SummaryLine("Vehículo", vehiclePlate.ifBlank { "—" })
         SummaryLine("Salida", departedText.ifBlank { "—" })
         SummaryLine("Llegada estimada", expectedArrivalText.ifBlank { "—" })
-        SummaryLine("Costo transporte", "Bs ${formatMoney(freight)}")
-        SummaryLine("Costo grúa", "Bs ${formatMoney(grua)}")
+        SummaryLine("Costo transporte", formatMoneyBs(freight))
+        SummaryLine("Costo grúa", formatMoneyBs(grua))
         HorizontalDivider(color = AppThemeState.semantic.border.copy(alpha = 0.4f))
         Text(
             "Lotes (${lots.size})",
@@ -934,8 +934,8 @@ private fun TransferSummaryCard(
     SectionCard(title = "Resumen del traslado", subtitle = "Cálculo en tiempo real") {
         SummaryLine("Chofer", driver?.name ?: "Sin seleccionar")
         SummaryLine("Vehículo", vehiclePlate.ifBlank { "—" })
-        SummaryLine("Costo transporte", "Bs ${formatMoney(freight)}")
-        SummaryLine("Costo grúa", "Bs ${formatMoney(grua)}")
+        SummaryLine("Costo transporte", formatMoneyBs(freight))
+        SummaryLine("Costo grúa", formatMoneyBs(grua))
         HorizontalDivider(color = AppThemeState.semantic.border.copy(alpha = 0.4f))
         Text(
             "Lotes seleccionados (${lots.size})",
@@ -980,7 +980,7 @@ private fun TransferSummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Bs ${formatMoney(total)}",
+                formatMoneyBs(total),
                 style = AppTypography.MetricMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -1005,15 +1005,15 @@ private fun PrimaryActionBar(
                 style = AppTypography.BodySmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            SummaryLine("Costo transporte", "Bs ${formatMoney(freight)}")
-            SummaryLine("Costo grúa", "Bs ${formatMoney(grua)}")
+        SummaryLine("Costo transporte", formatMoneyBs(freight))
+        SummaryLine("Costo grúa", formatMoneyBs(grua))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Total", style = AppTypography.CardTitle, color = MaterialTheme.colorScheme.onSurface)
                 Text(
-                    "Bs ${formatMoney(total)}",
+                    formatMoneyBs(total),
                     style = AppTypography.CardTitle.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -1127,8 +1127,8 @@ private fun FlowRowInfo(run: ProviderTransportRun) {
         InfoPair("Salida", formatEpochMs(run.departedAtEpochMs))
         run.expectedArrivalEpochMs?.let { InfoPair("Est. llegada", formatEpochMs(it)) }
         run.arrivedAtEpochMs?.let { InfoPair("Llegada", formatEpochMs(it)) }
-        InfoPair("Transporte", "Bs ${formatMoney(run.freightCost)}")
-        InfoPair("Grúa", "Bs ${formatMoney(run.gruaCost)}")
+        InfoPair("Transporte", formatMoneyBs(run.freightCost))
+        InfoPair("Grúa", formatMoneyBs(run.gruaCost))
         InfoPair("Lotes", run.lots.size.toString())
     }
 }

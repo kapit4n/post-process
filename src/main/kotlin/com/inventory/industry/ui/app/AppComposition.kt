@@ -14,6 +14,7 @@ val LocalSnackbarHostState =
 data class AppMessenger(
     val showSuccess: (String) -> Unit,
     val showError: (String) -> Unit,
+    val showMessage: (String, SnackbarDuration) -> Unit = { _, _ -> },
 )
 
 val LocalAppMessenger =

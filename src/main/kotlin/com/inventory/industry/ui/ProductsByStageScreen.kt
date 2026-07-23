@@ -117,9 +117,9 @@ import com.inventory.industry.data.Transformation
 import com.inventory.industry.data.TransformationProcessingStatus
 import com.inventory.industry.domain.PoleStorageLocation
 import com.inventory.industry.domain.ProductStage
-import com.inventory.industry.reports.PdfSaveDialog
 import com.inventory.industry.reports.StagesDetailPdfGenerator
 import com.inventory.industry.reports.buildStagesDetailReport
+import com.inventory.industry.ui.exportPdfWorkflow
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
@@ -161,49 +161,36 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
 
     fun exportStagesPdf() {
         if (pdfExporting) return
-        pdfExporting = true
-        scope.launch {
-            try {
-                val report = withContext(Dispatchers.IO) { buildStagesDetailReport(repo) }
-                val bytes =
-                    withContext(Dispatchers.IO) {
-                        StagesDetailPdfGenerator.generate(report)
-                    }
-                val defaultName =
-                    "reporte-por-etapa-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf"
-                val target =
-                    withContext(Dispatchers.Main) {
-                        PdfSaveDialog.chooseSaveFile(defaultName)
-                    }
-                if (target != null) {
-                    withContext(Dispatchers.IO) { target.writeBytes(bytes) }
-                    messenger.showSuccess("PDF guardado: ${target.name}")
-                }
-            } catch (e: Exception) {
-                messenger.showError(
-                    "No se pudo generar el PDF: ${e.message ?: "error desconocido"}",
-                )
-            } finally {
-                pdfExporting = false
-            }
-        }
+        exportPdfWorkflow(
+            scope = scope,
+            messenger = messenger,
+            defaultFileName = "reporte-por-etapa-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf",
+            buildReport = { buildStagesDetailReport(repo) },
+            generatePdf = { report -> StagesDetailPdfGenerator.generate(report) },
+            onStarted = { pdfExporting = true },
+            onFinished = { pdfExporting = false },
+        )
     }
 
     fun reload() {
         wipActionError = null
         scope.launch {
-            products =
-                withContext(Dispatchers.IO) {
-                    repo.listProducts(stage)
-                }
-            inboundEta =
-                withContext(Dispatchers.IO) {
-                    repo.inboundEtaByProductId(products.map { it.id })
-                }
-            wipInStage =
-                withContext(Dispatchers.IO) {
-                    repo.listInProgressTransformations(stage)
-                }
+            try {
+                products =
+                    withContext(Dispatchers.IO) {
+                        repo.listProducts(stage)
+                    }
+                inboundEta =
+                    withContext(Dispatchers.IO) {
+                        repo.inboundEtaByProductId(products.map { it.id })
+                    }
+                wipInStage =
+                    withContext(Dispatchers.IO) {
+                        repo.listInProgressTransformations(stage)
+                    }
+            } catch (e: Exception) {
+                messenger.showError("No se pudieron cargar datos: ${e.message}")
+            }
         }
     }
 
@@ -490,8 +477,12 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                         },
                         onDelete = {
                             scope.launch {
-                                withContext(Dispatchers.IO) { repo.deleteProduct(it.id) }
-                                reload()
+                                try {
+                                    withContext(Dispatchers.IO) { repo.deleteProduct(it.id) }
+                                    reload()
+                                } catch (e: Exception) {
+                                    messenger.showError("No se pudo eliminar: ${e.message}")
+                                }
                             }
                         },
                         onAdvance = {
@@ -501,8 +492,12 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
                         onMarkFailed = { markFailedTarget = it },
                         onClearFailure = {
                             scope.launch {
-                                withContext(Dispatchers.IO) { repo.clearProductFailure(it.id) }
-                                reload()
+                                try {
+                                    withContext(Dispatchers.IO) { repo.clearProductFailure(it.id) }
+                                    reload()
+                                } catch (e: Exception) {
+                                    messenger.showError("No se pudo quitar falla: ${e.message}")
+                                }
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -579,30 +574,34 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
             onDismiss = { showEditor = false },
             onSave = { draft ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        val pid =
-                            repo.upsertProduct(
-                                id = draft.id,
-                                name = draft.name,
-                                productLine = draft.productLine,
-                                stage = draft.stage,
-                                quantity = draft.quantity,
-                                notes = draft.notes,
-                                catalogProductId = draft.catalogProductId,
-                                providerId = draft.providerId,
-                                standardSalePrice = draft.standardSalePrice,
-                                failedSalePrice = draft.failedSalePrice,
-                                acquisitionCostPerPole = draft.acquisitionCostPerPole,
-                                acquisitionStorageLocation = draft.acquisitionStorageLocation,
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val pid =
+                                repo.upsertProduct(
+                                    id = draft.id,
+                                    name = draft.name,
+                                    productLine = draft.productLine,
+                                    stage = draft.stage,
+                                    quantity = draft.quantity,
+                                    notes = draft.notes,
+                                    catalogProductId = draft.catalogProductId,
+                                    providerId = draft.providerId,
+                                    standardSalePrice = draft.standardSalePrice,
+                                    failedSalePrice = draft.failedSalePrice,
+                                    acquisitionCostPerPole = draft.acquisitionCostPerPole,
+                                    acquisitionStorageLocation = draft.acquisitionStorageLocation,
+                                )
+                            repo.syncAcquisitionTransportCosts(
+                                productId = pid,
+                                location = draft.acquisitionStorageLocation,
+                                lines = draft.transportLines,
                             )
-                        repo.syncAcquisitionTransportCosts(
-                            productId = pid,
-                            location = draft.acquisitionStorageLocation,
-                            lines = draft.transportLines,
-                        )
+                        }
+                        showEditor = false
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    showEditor = false
-                    reload()
                 }
             },
         )
@@ -659,10 +658,14 @@ fun ProductsByStageScreen(repo: InventoryRepository) {
             onConfirm = { atStage, failedPrice, noteExtra ->
                 markFailedTarget = null
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.markProductFailed(product.id, atStage, failedPrice, noteExtra)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.markProductFailed(product.id, atStage, failedPrice, noteExtra)
+                        }
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo marcar fallado: ${e.message}")
                     }
-                    reload()
                 }
             },
         )

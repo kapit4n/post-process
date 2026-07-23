@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Resource
 import com.inventory.industry.data.ResourceStockLot
+import com.inventory.industry.ui.app.LocalAppMessenger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,17 +55,26 @@ fun ResourcesScreen(repo: InventoryRepository) {
     var stockEditor by remember { mutableStateOf<ResourceStockLot?>(null) }
     var creatingStock by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val messenger = LocalAppMessenger.current
 
     fun reloadCatalog() {
         scope.launch {
-            rows = withContext(Dispatchers.IO) { repo.listResources() }
+            try {
+                rows = withContext(Dispatchers.IO) { repo.listResources() }
+            } catch (e: Exception) {
+                messenger.showError("No se pudieron cargar insumos: ${e.message}")
+            }
         }
     }
 
     fun reloadStock() {
         scope.launch {
-            stockLots = withContext(Dispatchers.IO) { repo.listResourceStockLots() }
-            stockValueEstimate = withContext(Dispatchers.IO) { repo.resourceStockTotalValueEstimate() }
+            try {
+                stockLots = withContext(Dispatchers.IO) { repo.listResourceStockLots() }
+                stockValueEstimate = withContext(Dispatchers.IO) { repo.resourceStockTotalValueEstimate() }
+            } catch (e: Exception) {
+                messenger.showError("No se pudo cargar inventario: ${e.message}")
+            }
         }
     }
 
@@ -122,9 +132,13 @@ fun ResourcesScreen(repo: InventoryRepository) {
                     },
                     onDelete = {
                         scope.launch {
-                            withContext(Dispatchers.IO) { repo.deleteResource(it.id) }
-                            reloadCatalog()
-                            reloadStock()
+                            try {
+                                withContext(Dispatchers.IO) { repo.deleteResource(it.id) }
+                                reloadCatalog()
+                                reloadStock()
+                            } catch (e: Exception) {
+                                messenger.showError("No se pudo eliminar: ${e.message}")
+                            }
                         }
                     },
                 )
@@ -138,8 +152,12 @@ fun ResourcesScreen(repo: InventoryRepository) {
                         },
                         onDelete = {
                             scope.launch {
-                                withContext(Dispatchers.IO) { repo.deleteResourceStockLot(it.id) }
-                                reloadStock()
+                                try {
+                                    withContext(Dispatchers.IO) { repo.deleteResourceStockLot(it.id) }
+                                    reloadStock()
+                                } catch (e: Exception) {
+                                    messenger.showError("No se pudo eliminar: ${e.message}")
+                                }
                             }
                         },
                     )
@@ -156,12 +174,16 @@ fun ResourcesScreen(repo: InventoryRepository) {
             },
             onSave = { id, name, unit, cost ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.upsertResource(id, name, unit, cost)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.upsertResource(id, name, unit, cost)
+                        }
+                        creating = false
+                        editor = null
+                        reloadCatalog()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creating = false
-                    editor = null
-                    reloadCatalog()
                 }
             },
         )
@@ -177,20 +199,24 @@ fun ResourcesScreen(repo: InventoryRepository) {
             },
             onSave = { id, resourceId, quantity, acquisitionPrice, expirationText, notes ->
                 scope.launch {
-                    val exp = parseIsoDate(expirationText)
-                    withContext(Dispatchers.IO) {
-                        repo.upsertResourceStockLot(
-                            id = id,
-                            resourceId = resourceId,
-                            quantity = quantity,
-                            acquisitionPricePerUnit = acquisitionPrice,
-                            expirationDate = exp,
-                            notes = notes?.trim()?.ifBlank { null },
-                        )
+                    try {
+                        val exp = parseIsoDate(expirationText)
+                        withContext(Dispatchers.IO) {
+                            repo.upsertResourceStockLot(
+                                id = id,
+                                resourceId = resourceId,
+                                quantity = quantity,
+                                acquisitionPricePerUnit = acquisitionPrice,
+                                expirationDate = exp,
+                                notes = notes?.trim()?.ifBlank { null },
+                            )
+                        }
+                        creatingStock = false
+                        stockEditor = null
+                        reloadStock()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creatingStock = false
-                    stockEditor = null
-                    reloadStock()
                 }
             },
         )

@@ -36,6 +36,9 @@ fun formatQty(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else
 
 fun formatMoney(v: Double): String = "%.2f".format(v)
 
+/** Moneda local: "Bs 1,250.00" */
+fun formatMoneyBs(v: Double): String = "Bs ${formatMoney(v)}"
+
 /**
  * Monto desde el campo de texto (acepta "1234.56", "1234,56", "1.234,56", "1,234.56").
  */

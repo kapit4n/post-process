@@ -273,11 +273,11 @@ fun seedDemoInventoryDataIfEmpty() {
         // --- Catalog Products ---
         data class CatSeed(val name: String, val line: String, val desc: String)
         val catalogSeeds = listOf(
-            CatSeed("Poste de Pino 8m", "Distribución Primaria", "Poste de pino radiata tratado en autoclave, 8 metros, uso en líneas de distribución primaria de media tensión."),
-            CatSeed("Poste de Pino 10m", "Distribución Secundaria", "Poste de pino radiata tratado en autoclave, 10 metros, uso en líneas de distribución secundaria."),
-            CatSeed("Poste de Eucalipto 7m", "Distribución Domiciliaria", "Poste de eucalipto tratado en autoclave, 7 metros, ideal para acometidas domiciliarias y alumbrado menor."),
-            CatSeed("Poste de Pino 12m", "Transmisión", "Poste de pino radiata tratado en autoclave, 12 metros, para líneas de transmisión de alta tensión."),
-            CatSeed("Poste de Eucalipto 9m", "Alumbrado Público", "Poste de eucalipto tratado en autoclave, 9 metros, destinado a luminarias de alumbrado público urbano."),
+            CatSeed("Poste de Madera 8m", "Distribución Primaria", "Poste de madera tratado en autoclave, 8 metros, uso en líneas de distribución primaria de media tensión."),
+            CatSeed("Poste de Madera 10m", "Distribución Secundaria", "Poste de madera tratado en autoclave, 10 metros, uso en líneas de distribución secundaria."),
+            CatSeed("Poste de Madera 7m", "Distribución Domiciliaria", "Poste de madera tratado en autoclave, 7 metros, ideal para acometidas domiciliarias y alumbrado menor."),
+            CatSeed("Poste de Madera 12m", "Transmisión", "Poste de madera tratado en autoclave, 12 metros, para líneas de transmisión de alta tensión."),
+            CatSeed("Poste de Madera 9m", "Alumbrado Público", "Poste de madera tratado en autoclave, 9 metros, destinado a luminarias de alumbrado público urbano."),
         )
         val catalogIds = catalogSeeds.map { cs ->
             CatalogProductsTable.insert {
@@ -291,10 +291,10 @@ fun seedDemoInventoryDataIfEmpty() {
         // --- Providers ---
         data class ProvSeed(val name: String, val contact: String?, val notes: String?)
         val provSeeds = listOf(
-            ProvSeed("Forestal Arauco Sur", "+56 42 2 310 5500", "Proveedor principal de pino radiata. Predio en Mulchén."),
-            ProvSeed("Maderas del Maule SpA", "+56 41 2 245 8800", "Eucalipto y pino. Predio en Linares."),
-            ProvSeed("Comercializadora Bosque Norte", "+56 43 2 331 2200", "Proveedor secundario, variedad de especies."),
-            ProvSeed("Aserradero Don Carlos Ltda.", "+56 42 2 222 1100", "Troncos precortados y aserrío."),
+            ProvSeed("Maderas Chapare", "+591 72123456", "Proveedor principal de pino. Predio en Chapare, Cochabamba."),
+            ProvSeed("Forestal Tunari", "+591 71234567", "Madera dura y blanda. Predio en Cochabamba."),
+            ProvSeed("Bosques del Oriente", "+591 73123456", "Proveedor secundario, variedad de especies. Santa Cruz."),
+            ProvSeed("Aserradero El Valle", "+591 74123456", "Troncos precortados y aserrío. Tarija."),
         )
         val provIds = provSeeds.map { ps ->
             PoleProvidersTable.insert {
@@ -308,11 +308,11 @@ fun seedDemoInventoryDataIfEmpty() {
         // --- Clients ---
         data class ClientSeed(val name: String, val contact: String?, val notes: String?)
         val clientSeeds = listOf(
-            ClientSeed("Distribuidora Eléctrica del Sur SpA", "+56 42 2 350 9900", "Cliente habitual. Compra lotes grandes mensualmente."),
-            ClientSeed("Municipalidad de Concepción", "+56 41 2 220 3300", "Licitaciones públicas de alumbrado."),
-            ClientSeed("Constructora Sur Limitada", "+56 42 2 298 7700", "Constructora regional. Compra para proyectos de infraestructura."),
-            ClientSeed("Cooperativa Eléctrica Bio Bio", "+56 41 2 265 4400", "Cooperativa de distribución eléctrica rural."),
-            ClientSeed("Sodimac Regional", "+56 42 2 310 1100", "Venta al por menor de postes para jardinería y cercos."),
+            ClientSeed("Empresa Eléctrica Cochabamba", "+591 4 4567890", "Cliente habitual. Compra lotes grandes mensualmente."),
+            ClientSeed("Municipalidad de El Alto", "+591 2 2845678", "Licitaciones públicas de alumbrado."),
+            ClientSeed("Constructora Los Andes", "+591 4 4123456", "Constructora regional. Compra para proyectos de infraestructura."),
+            ClientSeed("Cooperativa Rural Andina", "+591 4 4789012", "Cooperativa de distribución eléctrica rural."),
+            ClientSeed("Servicios Eléctricos Bolivia", "+591 3 3654321", "Venta al por menor de postes para jardinería y cercos."),
         )
         val clientIds = clientSeeds.map { cs ->
             ClientsTable.insert {
@@ -326,9 +326,9 @@ fun seedDemoInventoryDataIfEmpty() {
         // --- Drivers ---
         data class DriverSeed(val name: String, val phone: String?, val notes: String?)
         val driverSeeds = listOf(
-            DriverSeed("Carlos Mendoza", "+56 9 8765 4321", "Chofer principal. Ruta Mulchén–Planta."),
-            DriverSeed("Roberto Espinoza", "+56 9 7654 3210", "Chofer auxiliar. Ruta Linares–Planta."),
-            DriverSeed("Juan Pablo Silva", "+56 9 6543 2109", "Chofer freelance. Disponible fines de semana."),
+            DriverSeed("Carlos Mamani", "+591 70123456", "Chofer principal. Ruta Cochabamba–Planta."),
+            DriverSeed("Juan Quispe", "+591 71234567", "Chofer auxiliar. Ruta Santa Cruz–Planta."),
+            DriverSeed("Luis Rojas", "+591 72123456", "Chofer freelance. Disponible fines de semana."),
         )
         val driverIds = driverSeeds.map { ds ->
             DriversTable.insert {
@@ -369,18 +369,18 @@ fun seedDemoInventoryDataIfEmpty() {
         )
         val lotSeeds = listOf(
             // EN_PROVEEDOR lots (awaiting transport)
-            LotSeed("Lote Pino 8m – Arauco #A-2026-041", "Distribución Primaria", 0, 0, 45.0, 25_000.0, 95_000.0, 38_000.0, PoleStorageLocation.EN_PROVEEDOR, 5, "Lote en predio Forestal Arauco Sur, Mulchén"),
-            LotSeed("Lote Eucalipto 7m – Maule #M-2026-038", "Distribución Domiciliaria", 2, 1, 30.0, 30_000.0, 85_000.0, 32_000.0, PoleStorageLocation.EN_PROVEEDOR, 3, "Lote en predio Maderas del Maule"),
-            LotSeed("Lote Pino 10m – Arauco #A-2026-043", "Distribución Secundaria", 1, 0, 40.0, 26_500.0, 105_000.0, 42_000.0, PoleStorageLocation.EN_PROVEEDOR, 2, "Pino radiata 10m en Mulchén"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-041", "Distribución Primaria", 0, 0, 45.0, 25_000.0, 95_000.0, 38_000.0, PoleStorageLocation.EN_PROVEEDOR, 5, "Lote en predio Maderas Chapare, Cochabamba"),
+            LotSeed("Lote Madera 7m – Tunari #T-2026-038", "Distribución Domiciliaria", 2, 1, 30.0, 30_000.0, 85_000.0, 32_000.0, PoleStorageLocation.EN_PROVEEDOR, 3, "Lote en predio Forestal Tunari"),
+            LotSeed("Lote Madera 10m – Chapare #C-2026-043", "Distribución Secundaria", 1, 0, 40.0, 26_500.0, 105_000.0, 42_000.0, PoleStorageLocation.EN_PROVEEDOR, 2, "Madera 10m en Cochabamba"),
             // EN_TRANSITO lots
-            LotSeed("Lote Pino 12m – Bosque Norte #BN-2026-029", "Transmisión", 3, 2, 20.0, 28_000.0, 140_000.0, 55_000.0, PoleStorageLocation.EN_TRANSITO, 10, "En tránsito desde Bosque Norte"),
-            LotSeed("Lote Eucalipto 9m – Maule #M-2026-035", "Alumbrado Público", 4, 1, 35.0, 30_000.0, 98_000.0, 37_000.0, PoleStorageLocation.EN_TRANSITO, 8, "En tránsito desde Linares"),
+            LotSeed("Lote Madera 12m – Bosques del Oriente #BO-2026-029", "Transmisión", 3, 2, 20.0, 28_000.0, 140_000.0, 55_000.0, PoleStorageLocation.EN_TRANSITO, 10, "En tránsito desde Santa Cruz"),
+            LotSeed("Lote Madera 9m – Tunari #T-2026-035", "Alumbrado Público", 4, 1, 35.0, 30_000.0, 98_000.0, 37_000.0, PoleStorageLocation.EN_TRANSITO, 8, "En tránsito desde Cochabamba"),
             // FABRICA lots (raw, awaiting processing)
-            LotSeed("Lote Pino 8m – Arauco #A-2026-039", "Distribución Primaria", 0, 0, 50.0, 25_500.0, 95_000.0, 38_000.0, PoleStorageLocation.FABRICA, 25, "Llegó hace 25 días, pendiente de descortezado"),
-            LotSeed("Lote Eucalipto 7m – Don Carlos #DC-2026-033", "Distribución Domiciliaria", 2, 3, 25.0, 27_000.0, 85_000.0, 32_000.0, PoleStorageLocation.FABRICA, 20, "Troncos precortados por proveedor"),
-            LotSeed("Lote Pino 10m – Maule #M-2026-036", "Distribución Secundaria", 1, 1, 35.0, 26_000.0, 105_000.0, 42_000.0, PoleStorageLocation.FABRICA, 18, "Pino 10m, listo para proceso"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-039", "Distribución Primaria", 0, 0, 50.0, 25_500.0, 95_000.0, 38_000.0, PoleStorageLocation.FABRICA, 25, "Llegó hace 25 días, pendiente de descortezado"),
+            LotSeed("Lote Madera 7m – El Valle #V-2026-033", "Distribución Domiciliaria", 2, 3, 25.0, 27_000.0, 85_000.0, 32_000.0, PoleStorageLocation.FABRICA, 20, "Troncos precortados por proveedor"),
+            LotSeed("Lote Madera 10m – Tunari #T-2026-036", "Distribución Secundaria", 1, 1, 35.0, 26_000.0, 105_000.0, 42_000.0, PoleStorageLocation.FABRICA, 18, "Madera 10m, listo para proceso"),
             // Failed lot at CRUDO
-            LotSeed("Lote Pino 8m – Arauco #A-2026-037 (Fallado)", "Distribución Primaria", 0, 0, 8.0, 25_000.0, 95_000.0, 30_000.0, PoleStorageLocation.FABRICA, 30, "Postes con defecto de curvatura detectado"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-037 (Fallado)", "Distribución Primaria", 0, 0, 8.0, 25_000.0, 95_000.0, 30_000.0, PoleStorageLocation.FABRICA, 30, "Postes con defecto de curvatura detectado"),
         )
 
         val productIds = mutableListOf<Int>()
@@ -414,23 +414,23 @@ fun seedDemoInventoryDataIfEmpty() {
         }
 
         // --- Transport Runs ---
-        // Completed run 1: from Arauco (lots 0→factory), 35 days ago
+        // Completed run 1: from Chapare (lots 0→factory), 35 days ago
         val run1Departed = now - 40L * day
         val run1Arrived = now - 35L * day
         val run1Id = ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[0]
-            it[ProviderTransportRunsTable.vehiclePlate] = "BB-XX-12"
+            it[ProviderTransportRunsTable.vehiclePlate] = "BB-LPV-12"
             it[ProviderTransportRunsTable.freightCost] = 850_000.0
             it[ProviderTransportRunsTable.gruaCost] = 120_000.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run1Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run1Departed + 2L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = run1Arrived
             it[ProviderTransportRunsTable.status] = ProviderTransportRunStatus.COMPLETED.name
-            it[ProviderTransportRunsTable.notes] = "Traslado de pino 8m desde predio Mulchén"
+            it[ProviderTransportRunsTable.notes] = "Traslado de pino 8m desde predio Cochabamba"
             it[ProviderTransportRunsTable.createdAtEpochMs] = run1Departed
         }[ProviderTransportRunsTable.id]
 
-        // Link product 5 (Lote Pino 8m Arauco #A-2026-039) to run1
+        // Link product 5 (Lote Madera 8m Chapare #C-2026-039) to run1
         ProviderTransportRunProductsTable.insert {
             it[ProviderTransportRunProductsTable.transportRunId] = run1Id
             it[ProviderTransportRunProductsTable.productId] = productIds[5]
@@ -451,19 +451,19 @@ fun seedDemoInventoryDataIfEmpty() {
             it[AcquisitionTransportCostsTable.createdAtEpochMs] = run1Arrived
         }
 
-        // Completed run 2: from Don Carlos + Maule (lots 6,7→factory), 22 days ago
+        // Completed run 2: from El Valle + Tunari (lots 6,7→factory), 22 days ago
         val run2Departed = now - 28L * day
         val run2Arrived = now - 22L * day
         val run2Id = ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[1]
-            it[ProviderTransportRunsTable.vehiclePlate] = "CC-BB-34"
+            it[ProviderTransportRunsTable.vehiclePlate] = "CC-MNS-34"
             it[ProviderTransportRunsTable.freightCost] = 1_200_000.0
             it[ProviderTransportRunsTable.gruaCost] = 180_000.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run2Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run2Departed + 3L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = run2Arrived
             it[ProviderTransportRunsTable.status] = ProviderTransportRunStatus.COMPLETED.name
-            it[ProviderTransportRunsTable.notes] = "Traslado combinado: eucalipto 7m (Linares) + pino 10m (Linares)"
+            it[ProviderTransportRunsTable.notes] = "Traslado combinado: eucalipto 7m (Cochabamba) + pino 10m (Cochabamba)"
             it[ProviderTransportRunsTable.createdAtEpochMs] = run2Departed
         }[ProviderTransportRunsTable.id]
 
@@ -513,21 +513,21 @@ fun seedDemoInventoryDataIfEmpty() {
         val run3Departed = now - 2L * day
         ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[2]
-            it[ProviderTransportRunsTable.vehiclePlate] = "DD-CC-56"
+            it[ProviderTransportRunsTable.vehiclePlate] = "DD-SCZ-56"
             it[ProviderTransportRunsTable.freightCost] = 950_000.0
             it[ProviderTransportRunsTable.gruaCost] = 140_000.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run3Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run3Departed + 3L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = null
             it[ProviderTransportRunsTable.status] = ProviderTransportRunStatus.IN_PROGRESS.name
-            it[ProviderTransportRunsTable.notes] = "Traslado de pino 12m y eucalipto 9m. Llegada estimada en 1 día."
+            it[ProviderTransportRunsTable.notes] = "Traslado de madera 12m y madera 9m. Llegada estimada en 1 día."
             it[ProviderTransportRunsTable.createdAtEpochMs] = run3Departed
         }
 
         // --- Transformations and resulting products ---
 
         // === TRANSFORMATION 1: CRUDO → DESCORTEZADO ===
-        // Source: lot 5 (Lote Pino 8m Arauco #A-2026-039, qty=50), take 45 poles
+        // Source: lot 5 (Lote Madera 8m Chapare #C-2026-039, qty=50), take 45 poles
         val tx1At = now - 15L * day
         val tx1Id = TransformationsTable.insert {
             it[TransformationsTable.fromStage] = ProductStage.CRUDO.name
@@ -538,7 +538,7 @@ fun seedDemoInventoryDataIfEmpty() {
             it[TransformationsTable.durationMinutes] = 480
             it[TransformationsTable.successCount] = 42.0
             it[TransformationsTable.failedCount] = 3.0
-            it[TransformationsTable.notes] = "Descortezado y secado de pino 8m. 3 postes con defecto de curvatura."
+            it[TransformationsTable.notes] = "Descortezado y secado de madera 8m. 3 postes con defecto de curvatura."
             it[TransformationsTable.createdAtEpochMs] = tx1At
         }[TransformationsTable.id]
 
@@ -557,7 +557,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create DESCORTEZADO success lot
         val descorteId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Descortezados (lote #${tx1Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Descortezados (lote #${tx1Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.DESCORTEZADO.name
             it[ProductsTable.quantity] = 42.0
@@ -575,7 +575,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create failed lot at CRUDO
         val failedDescorteId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Fallado en descortezado (lote #${tx1Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Fallado en descortezado (lote #${tx1Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.CRUDO.name
             it[ProductsTable.quantity] = 3.0
@@ -635,7 +635,7 @@ fun seedDemoInventoryDataIfEmpty() {
         TransformationInputsTable.insert {
             it[TransformationInputsTable.transformationId] = tx2Id
             it[TransformationInputsTable.sourceProductId] = descorteId
-            it[TransformationInputsTable.sourceName] = "Postes Pino 8m – Descortezados (lote #${tx1Id})"
+            it[TransformationInputsTable.sourceName] = "Postes Madera 8m – Descortezados (lote #${tx1Id})"
             it[TransformationInputsTable.sourceLine] = "Distribución Primaria"
             it[TransformationInputsTable.quantity] = 38.0
         }
@@ -646,7 +646,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create TRATADO success lot
         val tratadoId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Tratados (lote #${tx2Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Tratados (lote #${tx2Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.TRATADO.name
             it[ProductsTable.quantity] = 36.0
@@ -664,7 +664,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Failed lot at DESCORTEZADO
         val failedTratadoId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Fallado en tratamiento (lote #${tx2Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Fallado en tratamiento (lote #${tx2Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.DESCORTEZADO.name
             it[ProductsTable.quantity] = 2.0
@@ -724,7 +724,7 @@ fun seedDemoInventoryDataIfEmpty() {
         TransformationInputsTable.insert {
             it[TransformationInputsTable.transformationId] = tx3Id
             it[TransformationInputsTable.sourceProductId] = tratadoId
-            it[TransformationInputsTable.sourceName] = "Postes Pino 8m – Tratados (lote #${tx2Id})"
+            it[TransformationInputsTable.sourceName] = "Postes Madera 8m – Tratados (lote #${tx2Id})"
             it[TransformationInputsTable.sourceLine] = "Distribución Primaria"
             it[TransformationInputsTable.quantity] = 34.0
         }
@@ -735,7 +735,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create TERMINADO success lot
         val terminadoId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Terminados (lote #${tx3Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Terminados (lote #${tx3Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.TERMINADO.name
             it[ProductsTable.quantity] = 33.0
@@ -753,7 +753,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Failed lot at TRATADO
         val failedTermId = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Pino 8m – Fallado en acabado (lote #${tx3Id})"
+            it[ProductsTable.name] = "Postes Madera 8m – Fallado en acabado (lote #${tx3Id})"
             it[ProductsTable.productLine] = "Distribución Primaria"
             it[ProductsTable.stage] = ProductStage.TRATADO.name
             it[ProductsTable.quantity] = 1.0
@@ -795,7 +795,7 @@ fun seedDemoInventoryDataIfEmpty() {
         }
 
         // === TRANSFORMATION 4: CRUDO → DESCORTEZADO (second batch) ===
-        // Source: lot 6 (Lote Eucalipto 7m Don Carlos, qty=25), take 22 poles
+        // Source: lot 6 (Lote Madera 7m El Valle, qty=25), take 22 poles
         val tx4At = now - 5L * day
         val tx4Id = TransformationsTable.insert {
             it[TransformationsTable.fromStage] = ProductStage.CRUDO.name
@@ -806,7 +806,7 @@ fun seedDemoInventoryDataIfEmpty() {
             it[TransformationsTable.durationMinutes] = 360
             it[TransformationsTable.successCount] = 20.0
             it[TransformationsTable.failedCount] = 2.0
-            it[TransformationsTable.notes] = "Descortezado de eucalipto 7m. Postes con nudos excesivos descartados."
+            it[TransformationsTable.notes] = "Descortezado de madera 7m. Postes con nudos excesivos descartados."
             it[TransformationsTable.createdAtEpochMs] = tx4At
         }[TransformationsTable.id]
 
@@ -824,7 +824,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create DESCORTEZADO lot from tx4
         val descorte2Id = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Eucalipto 7m – Descortezados (lote #${tx4Id})"
+            it[ProductsTable.name] = "Postes Madera 7m – Descortezados (lote #${tx4Id})"
             it[ProductsTable.productLine] = "Distribución Domiciliaria"
             it[ProductsTable.stage] = ProductStage.DESCORTEZADO.name
             it[ProductsTable.quantity] = 20.0
@@ -842,7 +842,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Failed lot at CRUDO from tx4
         val failedTx4Id = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Eucalipto 7m – Fallado en descortezado (lote #${tx4Id})"
+            it[ProductsTable.name] = "Postes Madera 7m – Fallado en descortezado (lote #${tx4Id})"
             it[ProductsTable.productLine] = "Distribución Domiciliaria"
             it[ProductsTable.stage] = ProductStage.CRUDO.name
             it[ProductsTable.quantity] = 2.0
@@ -895,14 +895,14 @@ fun seedDemoInventoryDataIfEmpty() {
             it[TransformationsTable.durationMinutes] = 600
             it[TransformationsTable.successCount] = 17.0
             it[TransformationsTable.failedCount] = 1.0
-            it[TransformationsTable.notes] = "Tratamiento eucalipto 7m con CCA. 1 poste con absorción irregular."
+            it[TransformationsTable.notes] = "Tratamiento madera 7m con CCA. 1 poste con absorción irregular."
             it[TransformationsTable.createdAtEpochMs] = tx5At
         }[TransformationsTable.id]
 
         TransformationInputsTable.insert {
             it[TransformationInputsTable.transformationId] = tx5Id
             it[TransformationInputsTable.sourceProductId] = descorte2Id
-            it[TransformationInputsTable.sourceName] = "Postes Eucalipto 7m – Descortezados (lote #${tx4Id})"
+            it[TransformationInputsTable.sourceName] = "Postes Madera 7m – Descortezados (lote #${tx4Id})"
             it[TransformationInputsTable.sourceLine] = "Distribución Domiciliaria"
             it[TransformationInputsTable.quantity] = 18.0
         }
@@ -913,7 +913,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Create TRATADO lot from tx5
         val tratado2Id = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Eucalipto 7m – Tratados (lote #${tx5Id})"
+            it[ProductsTable.name] = "Postes Madera 7m – Tratados (lote #${tx5Id})"
             it[ProductsTable.productLine] = "Distribución Domiciliaria"
             it[ProductsTable.stage] = ProductStage.TRATADO.name
             it[ProductsTable.quantity] = 17.0
@@ -931,7 +931,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Failed lot at DESCORTEZADO from tx5
         val failedTx5Id = ProductsTable.insert {
-            it[ProductsTable.name] = "Postes Eucalipto 7m – Fallado en tratamiento (lote #${tx5Id})"
+            it[ProductsTable.name] = "Postes Madera 7m – Fallado en tratamiento (lote #${tx5Id})"
             it[ProductsTable.productLine] = "Distribución Domiciliaria"
             it[ProductsTable.stage] = ProductStage.DESCORTEZADO.name
             it[ProductsTable.quantity] = 1.0
@@ -1006,12 +1006,12 @@ fun seedDemoInventoryDataIfEmpty() {
             it[SalesTable.totalAmount] = sale1Total
             it[SalesTable.unitPrice] = sale1UnitPrice
             it[SalesTable.soldAtEpochMs] = sale1At
-            it[SalesTable.notes] = "Venta a Distribuidora Eléctrica del Sur. Pedido #DE-2026-0087."
-            it[SalesTable.snapshotProductName] = "Postes Pino 8m – Terminados (lote #${tx3Id})"
+            it[SalesTable.notes] = "Venta a Empresa Eléctrica Cochabamba. Pedido #EE-2026-0087."
+            it[SalesTable.snapshotProductName] = "Postes Madera 8m – Terminados (lote #${tx3Id})"
             it[SalesTable.snapshotProductLine] = "Distribución Primaria"
             it[SalesTable.snapshotStage] = ProductStage.TERMINADO.name
             it[SalesTable.snapshotWasFailed] = false
-            it[SalesTable.snapshotProviderName] = "Forestal Arauco Sur"
+            it[SalesTable.snapshotProviderName] = "Maderas Chapare"
             it[SalesTable.snapshotAcquisitionCostTotal] = sale1Qty * materialPerPole1
             it[SalesTable.snapshotAcquisitionMaterialTotal] = sale1Qty * materialPerPole1
             it[SalesTable.snapshotAcquisitionTransportTotal] = sale1Qty * transportPerPole1
@@ -1026,7 +1026,7 @@ fun seedDemoInventoryDataIfEmpty() {
             it[ProductsTable.quantity] = 23.0
         }
 
-        // Sale 2: 15 poles TERMINADO → Municipalidad de Concepción, 7 days ago
+        // Sale 2: 15 poles TERMINADO → Municipalidad de El Alto, 7 days ago
         val sale2At = now - 7L * day
         val sale2UnitPrice = 98_000.0
         val sale2Qty = 15.0
@@ -1039,12 +1039,12 @@ fun seedDemoInventoryDataIfEmpty() {
             it[SalesTable.totalAmount] = sale2Total
             it[SalesTable.unitPrice] = sale2UnitPrice
             it[SalesTable.soldAtEpochMs] = sale2At
-            it[SalesTable.notes] = "Venta a Municipalidad de Concepción. Licitación pública #Muni-CON-2026-012."
-            it[SalesTable.snapshotProductName] = "Postes Pino 8m – Terminados (lote #${tx3Id})"
+            it[SalesTable.notes] = "Venta a Municipalidad de El Alto. Licitación pública #Muni-EA-2026-012."
+            it[SalesTable.snapshotProductName] = "Postes Madera 8m – Terminados (lote #${tx3Id})"
             it[SalesTable.snapshotProductLine] = "Distribución Primaria"
             it[SalesTable.snapshotStage] = ProductStage.TERMINADO.name
             it[SalesTable.snapshotWasFailed] = false
-            it[SalesTable.snapshotProviderName] = "Forestal Arauco Sur"
+            it[SalesTable.snapshotProviderName] = "Maderas Chapare"
             it[SalesTable.snapshotAcquisitionCostTotal] = sale2Qty * materialPerPole1
             it[SalesTable.snapshotAcquisitionMaterialTotal] = sale2Qty * materialPerPole1
             it[SalesTable.snapshotAcquisitionTransportTotal] = sale2Qty * transportPerPole1
@@ -1076,7 +1076,7 @@ fun seedDemoInventoryDataIfEmpty() {
             it[SalesTable.snapshotProductLine] = "Distribución Primaria"
             it[SalesTable.snapshotStage] = ProductStage.CRUDO.name
             it[SalesTable.snapshotWasFailed] = true
-            it[SalesTable.snapshotProviderName] = "Forestal Arauco Sur"
+            it[SalesTable.snapshotProviderName] = "Maderas Chapare"
             it[SalesTable.snapshotAcquisitionCostTotal] = sale3Qty * 25_000.0
             it[SalesTable.snapshotAcquisitionMaterialTotal] = sale3Qty * 25_000.0
             it[SalesTable.snapshotAcquisitionTransportTotal] = 0.0

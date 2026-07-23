@@ -102,10 +102,10 @@ class ScreenTests : UiTestBase() {
     @Test
     fun `providers screen shows data after insert`() {
         repo = setupRepository()
-        repo.upsertPoleProvider(id = null, name = "Forestal Arauco", contact = "+5691234", notes = null)
+        repo.upsertPoleProvider(id = null, name = "Maderas Chapare", contact = "+59172123456", notes = null)
         setContentWithTheme { ProvidersScreen(repo) }
         composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithText("Forestal Arauco").assertExists()
+        composeTestRule.onNodeWithText("Maderas Chapare").assertExists()
     }
 
     @Test

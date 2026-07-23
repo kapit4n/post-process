@@ -8,8 +8,9 @@ Este directorio contiene el registro detallado de todas las tareas realizadas en
 |---------|-----------|
 | `00-proyecto-general.md` | Descripción general del proyecto y objetivos |
 | `01-seed-data.md` | Documentación de la carga de datos semilla realistas |
-| `02-pantallas-ui.md` | Estado de las pantallas y componentes de UI |
+| `02-documentacion.md` | Documentación generada |
 | `03-mejoras-pendientes.md` | Lista de mejoras y features futuras |
+| `04-mejoras-calidad.md` | Milestones M1–M3: tests unitarios, tests UI, manejo de errores |
 
 ## Convención
 

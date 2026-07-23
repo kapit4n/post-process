@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.PoleProvider
+import com.inventory.industry.ui.app.LocalAppMessenger
 import com.inventory.industry.ui.components.buttons.AppButton
 import com.inventory.industry.ui.components.inputs.AppTextField
 import com.inventory.industry.ui.components.table.AppDataTable
@@ -42,11 +43,17 @@ fun ProvidersScreen(repo: InventoryRepository) {
     var editor by remember { mutableStateOf<PoleProvider?>(null) }
     var creating by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
+    var userMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val messenger = LocalAppMessenger.current
 
     fun reload() {
         scope.launch {
-            rows = withContext(Dispatchers.IO) { repo.listPoleProviders() }
+            try {
+                rows = withContext(Dispatchers.IO) { repo.listPoleProviders() }
+            } catch (e: Exception) {
+                messenger.showError("No se pudo cargar proveedores: ${e.message}")
+            }
         }
     }
 
@@ -116,8 +123,12 @@ fun ProvidersScreen(repo: InventoryRepository) {
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        withContext(Dispatchers.IO) { repo.deletePoleProvider(p.id) }
-                                        reload()
+                                        try {
+                                            withContext(Dispatchers.IO) { repo.deletePoleProvider(p.id) }
+                                            reload()
+                                        } catch (e: Exception) {
+                                            messenger.showError("No se pudo eliminar: ${e.message}")
+                                        }
                                     }
                                 },
                             ) {
@@ -139,12 +150,16 @@ fun ProvidersScreen(repo: InventoryRepository) {
             },
             onSave = { id, name, contact, notes ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.upsertPoleProvider(id, name, contact, notes)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.upsertPoleProvider(id, name, contact, notes)
+                        }
+                        creating = false
+                        editor = null
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creating = false
-                    editor = null
-                    reload()
                 }
             },
         )

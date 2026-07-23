@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,8 +23,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -269,23 +275,47 @@ fun SummaryLine(
     }
 }
 
-/** Banner informativo / de error en línea. */
+/** Banner informativo / de error en línea con icono y botón de descarte. */
 @Composable
 fun InlineBanner(
     message: String,
     isError: Boolean,
     modifier: Modifier = Modifier,
+    recovery: String? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
     val color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(AppShapes.small)
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.4f), AppShapes.small)
-            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+    val icon = if (isError) Icons.Default.ErrorOutline else Icons.Default.Info
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = AppShapes.small,
+        color = color.copy(alpha = 0.08f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f)),
     ) {
-        Text(message, style = AppTypography.BodySmall, color = color)
+        Row(
+            modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(18.dp).padding(top = 1.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(message, style = AppTypography.BodySmall, color = color)
+                if (!recovery.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(recovery, style = AppTypography.Caption, color = color.copy(alpha = 0.8f))
+                }
+            }
+            if (onDismiss != null) {
+                IconButton(onClick = onDismiss, modifier = Modifier.size(20.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar", modifier = Modifier.size(14.dp), tint = color.copy(alpha = 0.6f))
+                }
+            }
+        }
     }
 }
 

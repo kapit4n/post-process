@@ -26,7 +26,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.CatalogProduct
 import com.inventory.industry.data.InventoryRepository
+import com.inventory.industry.ui.app.LocalAppMessenger
 import com.inventory.industry.ui.components.buttons.AppButton
+import com.inventory.industry.ui.components.dashboard.InlineBanner
 import com.inventory.industry.ui.components.inputs.AppTextField
 import com.inventory.industry.ui.components.table.AppDataTable
 import com.inventory.industry.ui.components.table.AppTableColumn
@@ -42,11 +44,17 @@ fun CatalogScreen(repo: InventoryRepository) {
     var editor by remember { mutableStateOf<CatalogProduct?>(null) }
     var creating by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
+    var userMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val messenger = LocalAppMessenger.current
 
     fun reload() {
         scope.launch {
-            rows = withContext(Dispatchers.IO) { repo.listCatalogProducts() }
+            try {
+                rows = withContext(Dispatchers.IO) { repo.listCatalogProducts() }
+            } catch (e: Exception) {
+                messenger.showError("No se pudo cargar el catálogo: ${e.message}")
+            }
         }
     }
 
@@ -86,6 +94,9 @@ fun CatalogScreen(repo: InventoryRepository) {
             )
         },
     ) {
+        userMessage?.let {
+            InlineBanner(it, isError = true, modifier = Modifier, onDismiss = { userMessage = null })
+        }
         val columns =
             listOf(
                 AppTableColumn<CatalogProduct>(
@@ -137,8 +148,12 @@ fun CatalogScreen(repo: InventoryRepository) {
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        withContext(Dispatchers.IO) { repo.deleteCatalogProduct(c.id) }
-                                        reload()
+                                        try {
+                                            withContext(Dispatchers.IO) { repo.deleteCatalogProduct(c.id) }
+                                            reload()
+                                        } catch (e: Exception) {
+                                            messenger.showError("No se pudo eliminar: ${e.message}")
+                                        }
                                     }
                                 },
                             ) {
@@ -164,12 +179,16 @@ fun CatalogScreen(repo: InventoryRepository) {
             },
             onSave = { id, name, line, desc ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.upsertCatalogProduct(id, name, line, desc)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.upsertCatalogProduct(id, name, line, desc)
+                        }
+                        creating = false
+                        editor = null
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creating = false
-                    editor = null
-                    reload()
                 }
             },
         )

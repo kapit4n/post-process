@@ -30,7 +30,6 @@ import com.inventory.industry.data.AccountingBucket
 import com.inventory.industry.data.DashboardActivityEntry
 import com.inventory.industry.data.InventoryFlowSummary
 import com.inventory.industry.data.InventoryRepository
-import com.inventory.industry.reports.PdfSaveDialog
 import com.inventory.industry.reports.PolesInventoryPdfGenerator
 import com.inventory.industry.ui.app.LocalAppMessenger
 import com.inventory.industry.ui.components.dashboard.CompactKpiRow
@@ -73,31 +72,21 @@ fun DashboardScreen(
 
     fun exportPdf() {
         if (pdfExporting) return
-        pdfExporting = true
-        scope.launch {
-            try {
-                val summary = withContext(Dispatchers.IO) { repo.inventoryFlowSummary() }
-                val totalLots = withContext(Dispatchers.IO) { repo.listProducts().size }
-                val bytes =
-                    withContext(Dispatchers.IO) {
-                        PolesInventoryPdfGenerator.generate(summary, totalLots)
-                    }
-                val defaultName =
-                    "resumen-postes-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf"
-                val target =
-                    withContext(Dispatchers.Main) {
-                        PdfSaveDialog.chooseSaveFile(defaultName)
-                    }
-                if (target != null) {
-                    withContext(Dispatchers.IO) { target.writeBytes(bytes) }
-                    messenger.showSuccess("PDF guardado: ${target.name}")
-                }
-            } catch (e: Exception) {
-                messenger.showError("No se pudo generar el PDF: ${e.message ?: "error desconocido"}")
-            } finally {
-                pdfExporting = false
-            }
-        }
+        exportPdfWorkflow(
+            scope = scope,
+            messenger = messenger,
+            defaultFileName = "resumen-postes-${LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)}.pdf",
+            buildReport = {
+                val summary = repo.inventoryFlowSummary()
+                val totalLots = repo.listProducts().size
+                summary to totalLots
+            },
+            generatePdf = { (summary, totalLots) ->
+                PolesInventoryPdfGenerator.generate(summary, totalLots)
+            },
+            onStarted = { pdfExporting = true },
+            onFinished = { pdfExporting = false },
+        )
     }
 
     LaunchedEffect(Unit) {

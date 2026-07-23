@@ -40,6 +40,7 @@ import com.inventory.industry.data.InventoryRepository
 import com.inventory.industry.data.Resource
 import com.inventory.industry.data.StageResourceTemplate
 import com.inventory.industry.domain.ProductStage
+import com.inventory.industry.ui.app.LocalAppMessenger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -56,15 +57,24 @@ fun StageRecipesScreen(repo: InventoryRepository) {
     var editor by remember { mutableStateOf<StageResourceTemplate?>(null) }
     var creating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val messenger = LocalAppMessenger.current
 
     fun reload() {
         scope.launch {
-            rows = withContext(Dispatchers.IO) { repo.listStageResourceTemplates(stage) }
+            try {
+                rows = withContext(Dispatchers.IO) { repo.listStageResourceTemplates(stage) }
+            } catch (e: Exception) {
+                messenger.showError("No se pudieron cargar recetas: ${e.message}")
+            }
         }
     }
 
     LaunchedEffect(Unit) {
-        allResources = withContext(Dispatchers.IO) { repo.listResources() }
+        try {
+            allResources = withContext(Dispatchers.IO) { repo.listResources() }
+        } catch (e: Exception) {
+            messenger.showError("No se pudieron cargar insumos: ${e.message}")
+        }
     }
 
     LaunchedEffect(stage) {
@@ -154,8 +164,12 @@ fun StageRecipesScreen(repo: InventoryRepository) {
                             IconButton(
                                 onClick = {
                                     scope.launch {
-                                        withContext(Dispatchers.IO) { repo.deleteStageResourceTemplate(t.id) }
-                                        reload()
+                                        try {
+                                            withContext(Dispatchers.IO) { repo.deleteStageResourceTemplate(t.id) }
+                                            reload()
+                                        } catch (e: Exception) {
+                                            messenger.showError("No se pudo eliminar: ${e.message}")
+                                        }
                                     }
                                 },
                             ) {
@@ -180,19 +194,23 @@ fun StageRecipesScreen(repo: InventoryRepository) {
             },
             onSave = { id, resourceId, perPole, order, note ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.upsertStageResourceTemplate(
-                            id = id,
-                            fromStage = stage,
-                            resourceId = resourceId,
-                            amountPerPole = perPole,
-                            notes = note,
-                            displayOrder = order,
-                        )
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.upsertStageResourceTemplate(
+                                id = id,
+                                fromStage = stage,
+                                resourceId = resourceId,
+                                amountPerPole = perPole,
+                                notes = note,
+                                displayOrder = order,
+                            )
+                        }
+                        creating = false
+                        editor = null
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creating = false
-                    editor = null
-                    reload()
                 }
             },
         )

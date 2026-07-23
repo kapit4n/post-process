@@ -25,7 +25,7 @@ object TestDataBuilder {
 
     fun createProvider(
         name: String = "Proveedor Test",
-        contact: String? = "+56 9 1234 5678",
+        contact: String? = "+591 72123456",
         notes: String? = null,
     ): Int =
         PoleProvidersTable.insert {
@@ -37,7 +37,7 @@ object TestDataBuilder {
 
     fun createClient(
         name: String = "Cliente Test",
-        contact: String? = "+56 9 8765 4321",
+        contact: String? = "+591 73123456",
         notes: String? = null,
     ): Int =
         ClientsTable.insert {
@@ -49,7 +49,7 @@ object TestDataBuilder {
 
     fun createDriver(
         name: String = "Chofer Test",
-        phone: String? = "+56 9 1111 2222",
+        phone: String? = "+591 74123456",
         notes: String? = null,
     ): Int =
         DriversTable.insert {

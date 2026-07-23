@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -60,10 +61,13 @@ fun AppShell(repo: InventoryRepository) {
         remember(snackbarHostState, scope) {
             AppMessenger(
                 showSuccess = { msg ->
-                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                    scope.launch { snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short) }
                 },
                 showError = { msg ->
-                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                    scope.launch { snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Long) }
+                },
+                showMessage = { msg, dur ->
+                    scope.launch { snackbarHostState.showSnackbar(msg, duration = dur) }
                 },
             )
         }

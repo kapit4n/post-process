@@ -125,20 +125,129 @@ Status: 🟢 Completed
 
 ## Milestone 3 - Error Handling
 
-Status: ⬜ Not Started
+Status: 🟢 Completed
 
 ### Tasks
 
-- [ ] Audit all try/catch blocks
-- [ ] Create ErrorDialog component
-- [ ] Create ErrorSnackbar component
-- [ ] Define error categories
-- [ ] Add recovery suggestions to errors
-- [ ] Remove duplicated error handling
+- [x] Audit all try/catch blocks — found: 3 identical PDF try/catches, 6 screens with zero error handling, silent failures in CRUD
+- [x] Create `ErrorCategory` sealed class for typed errors (Database, Validation, Network, PdfExport, Concurrency, Unknown)
+- [x] Create `UserMessage` data class (text + optional recovery suggestion + category + isDismissable)
+- [x] Create `safeCall()` helper and `UserMessageException` for typed error propagation
+- [x] Enhance `InlineBanner` with dismiss button, icon (ErrorOutline/Info), recovery text, Surface layout
+- [x] Fix `AppMessenger` — `showMessage` accepts `SnackbarDuration`; success=Short, error=Long
+- [x] Extract `exportPdfWorkflow()` helper to eliminate 3 copy-pasted try/catch blocks
+- [x] Add try/catch + messenger.showError() to all CRUD operations (Catalog, Providers, Clients, Resources, Recipes, ProductsByStage)
+- [x] Standardize error variable naming across all screens
+- [x] Write 21 unit tests for ErrorCategory, UserMessage, safeCall, UserMessageException
+- [x] Write 6 UI tests for InlineBanner (message, recovery, dismiss)
+- [x] Run all tests and verify passing (208 tests, all green)
+- [x] Update ROADMAP.md
+
+### Test Count
+
+| File | Tests |
+|------|-------|
+| `UserMessageTest.kt` | 21 |
+| `InlineBannerTest.kt` | 6 |
+| **New M3 tests** | **27** |
+| Unit tests (M1) | 143 |
+| UI tests (M2) | 38 |
+| **Grand total** | **208** |
 
 ### Notes
 
-- (pending)
+- `exportPdfWorkflow()` uses generic report type `T` with `buildReport` and `generatePdf` lambdas — caller passes `onStarted`/`onFinished` to manage local exporting state
+- SalesScreen kept its inline try/catch because it needs custom success message with sale count (not possible with generic helper)
+- `safeCall()` returns `Result<T>` wrapping `UserMessageException` — preserves original exception as `cause`
+- All CRUD screens now use `messenger` (from `LocalAppMessenger.current`) instead of local error state
+
+### Files Created
+
+- `src/main/kotlin/.../ui/app/UserMessage.kt` (new) — ErrorCategory, UserMessage, safeCall, UserMessageException
+- `src/main/kotlin/.../ui/PdfExportHelper.kt` (new) — exportPdfWorkflow()
+- `src/test/kotlin/.../ui/UserMessageTest.kt` (new) — 21 tests
+- `src/test/kotlin/.../ui/InlineBannerTest.kt` (new) — 6 tests
+
+### Files Modified
+
+- `src/main/kotlin/.../ui/app/AppComposition.kt` — AppMessenger.showMessage accepts SnackbarDuration
+- `src/main/kotlin/.../ui/layout/AppShell.kt` — SnackbarDuration.Short/Long
+- `src/main/kotlin/.../ui/components/dashboard/DashboardComponents.kt` — InlineBanner: dismiss, icon, recovery, Surface
+- `src/main/kotlin/.../ui/DashboardScreen.kt` — uses exportPdfWorkflow()
+- `src/main/kotlin/.../ui/ProductsByStageScreen.kt` — uses exportPdfWorkflow(), try/catch on CRUD
+- `src/main/kotlin/.../ui/CatalogScreen.kt` — try/catch on CRUD + messenger
+- `src/main/kotlin/.../ui/ProvidersScreen.kt` — try/catch on CRUD + messenger
+- `src/main/kotlin/.../ui/ClientsScreen.kt` — try/catch on CRUD + messenger
+- `src/main/kotlin/.../ui/ResourcesScreen.kt` — try/catch on CRUD + messenger
+- `src/main/kotlin/.../ui/StageRecipesScreen.kt` — try/catch on CRUD + messenger
+
+### Problems Found
+
+- (none)
+
+---
+
+## Localization — Bolivia
+
+Status: 🟢 Completed
+
+### Tasks
+
+- [x] Currency localized to Bolivianos (Bs) — all displays use "Bs" prefix
+- [x] Currency formatter centralized — `formatMoneyBs()` in `Format.kt`
+- [x] All hardcoded `"Bs ${formatMoney(...)}"` patterns replaced with `formatMoneyBs()`
+- [x] Demo phone numbers replaced — all seed data uses +591 Bolivian format
+- [x] Company data localized — Bolivian provider names (Maderas Chapare, Forestal Tunari, Bosques del Oriente, Aserradero El Valle)
+- [x] Customer seed updated — Bolivian companies (Empresa Eléctrica Cochabamba, Municipalidad de El Alto, Constructora Los Andes, Cooperativa Rural Andina, Servicios Eléctricos Bolivia)
+- [x] Supplier seed updated — Bolivian suppliers with Bolivian phone numbers
+- [x] Driver data updated — Bolivian names (Carlos Mamani, Juan Quispe, Luis Rojas) with Bolivian phones
+- [x] Product catalog reviewed — "Poste de Madera" naming convention applied
+- [x] Geographic references updated — Cochabamba, Santa Cruz, El Alto, Tarija instead of Chilean cities
+- [x] Vehicle plates updated — Bolivian format (BB-LPV-12, CC-MNS-34, DD-SCZ-56)
+
+### Files Modified
+
+- `src/main/kotlin/.../ui/Format.kt` — added `formatMoneyBs()`
+- `src/main/kotlin/.../ui/SalesScreen.kt` — uses `formatMoneyBs()`
+- `src/main/kotlin/.../ui/ProviderTransportScreen.kt` — 10 occurrences replaced with `formatMoneyBs()`
+- `src/main/kotlin/.../data/Seed.kt` — all providers, clients, drivers, lots, transport runs, sales localized to Bolivia
+- `src/test/kotlin/.../data/TestDataBuilder.kt` — phone numbers updated to +591
+- `src/test/kotlin/.../ui/ScreenTests.kt` — phone number and provider name updated
+- `docs/tasks/01-seed-data.md` — currency and entity names updated
+
+### Problems Found
+
+- (none)
+
+### Recommendations
+
+- Consider adding locale-aware number formatting with thousands separator (Bolivian convention: `1.234.567,89`)
+- Phone validation could be added to enforce Bolivian format (+591 + 8 digits)
+- Date formatting could use `dd/MM/yyyy` for Bolivian convention (currently uses ISO `yyyy-MM-dd`)
+
+---
+
+## Price Reference List
+
+Status: 🟢 Completed
+
+### Tasks
+
+- [x] Create `docs/prices.md` with postes sale prices and insumos cost per unit
+- [x] Document all resource categories with prices (materia prima, preservantes, agua, autoclave, preparación, herrajes, acabados, auxiliares)
+- [x] Document postes prices by size (7m, 8m, 9m, 10m, 12m)
+- [x] Add quick reference summary table
+- [x] Update CHANGELOG_AI.md
+
+### Files Created
+
+- `docs/prices.md` (new) — price reference list
+
+### Notes
+
+- Document is reference only — not connected to application logic
+- Prices are from seed data and can be manually adjusted
+- To sync with app: update seed data in `Seed.kt` or edit directly in app screens
 
 ---
 

@@ -4,10 +4,10 @@
 
 ## Prioridad Alta
 
-- [ ] **Tests unitarios**: No existen tests. Implementar tests para `InventoryRepository` y lógica de costos
-- [ ] **Tests de UI**: Tests deCompose para pantallas críticas
-- [ ] **Manejo de errores**: Revisar y unificar mensajes de error en toda la app
-- [ ] **Validación de entrada**: Fortalecer validaciones en formularios de edición
+- [x] **Tests unitarios**: 143 tests cubriendo CRUD, costos, ventas, transporte, edge cases, dominio
+- [x] **Tests de UI**: 38 tests de Compose Desktop para navegación y pantallas individuales
+- [x] **Manejo de errores**: ErrorCategory tipado, UserMessage, exportPdfWorkflow, try/catch en todas las pantallas CRUD
+- [ ] **Validación de entrada**: Fortalecer validaciones en formularios de edición (Milestone 4)
 
 ## Prioridad Media
 

@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import com.inventory.industry.data.Client
 import com.inventory.industry.data.InventoryRepository
+import com.inventory.industry.ui.app.LocalAppMessenger
 import com.inventory.industry.ui.components.buttons.AppButton
 import com.inventory.industry.ui.components.dialogs.ClientEditorDialog
 import com.inventory.industry.ui.components.table.AppDataTable
@@ -40,10 +41,15 @@ fun ClientsScreen(repo: InventoryRepository) {
     var deleteError by remember { mutableStateOf<String?>(null) }
     var search by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val messenger = LocalAppMessenger.current
 
     fun reload() {
         scope.launch {
-            rows = withContext(Dispatchers.IO) { repo.listClients() }
+            try {
+                rows = withContext(Dispatchers.IO) { repo.listClients() }
+            } catch (e: Exception) {
+                messenger.showError("No se pudieron cargar clientes: ${e.message}")
+            }
         }
     }
 
@@ -145,12 +151,16 @@ fun ClientsScreen(repo: InventoryRepository) {
             },
             onSave = { id, name, contact, notes ->
                 scope.launch {
-                    withContext(Dispatchers.IO) {
-                        repo.upsertClient(id, name, contact, notes)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            repo.upsertClient(id, name, contact, notes)
+                        }
+                        creating = false
+                        editor = null
+                        reload()
+                    } catch (e: Exception) {
+                        messenger.showError("No se pudo guardar: ${e.message}")
                     }
-                    creating = false
-                    editor = null
-                    reload()
                 }
             },
         )

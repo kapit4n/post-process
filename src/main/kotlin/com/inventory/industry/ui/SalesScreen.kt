@@ -102,7 +102,7 @@ private val SALES_STEPS = listOf(
     "Confirmar venta",
 )
 
-private fun bs(value: Double): String = "Bs ${formatMoney(value)}"
+private fun bs(value: Double): String = formatMoneyBs(value)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

@@ -30,41 +30,41 @@ private data class SeedResource(val name: String, val unit: String, val costPerU
 private val DEFAULT_RESOURCES: List<SeedResource> =
     listOf(
         // 1. Materia prima
-        SeedResource("Materia prima · Tronco de pino", "unidad", 25_000.0),
-        SeedResource("Materia prima · Tronco de eucalipto", "unidad", 30_000.0),
-        SeedResource("Materia prima · Tronco (otras especies tratables)", "unidad", 27_000.0),
+        SeedResource("Materia prima · Tronco de pino", "unidad", 280.0),
+        SeedResource("Materia prima · Tronco de eucalipto", "unidad", 340.0),
+        SeedResource("Materia prima · Tronco (otras especies tratables)", "unidad", 320.0),
         // 2. Preservantes
-        SeedResource("Preservante · Sales CCA (arseniato de cobre cromatado)", "kg", 3_500.0),
-        SeedResource("Preservante · CCB (borato de cobre cromatado)", "kg", 3_200.0),
-        SeedResource("Preservante · Creosota", "L", 2_800.0),
-        SeedResource("Preservante · ACQ (cobre alcalino cuaternario)", "kg", 4_200.0),
-        SeedResource("Preservante · Boratos", "kg", 2_500.0),
+        SeedResource("Preservante · Sales CCA (arseniato de cobre cromatado)", "kg", 48.0),
+        SeedResource("Preservante · CCB (borato de cobre cromatado)", "kg", 45.0),
+        SeedResource("Preservante · Creosota", "L", 35.0),
+        SeedResource("Preservante · ACQ (cobre alcalino cuaternario)", "kg", 72.0),
+        SeedResource("Preservante · Boratos", "kg", 22.0),
         // 3. Agua
-        SeedResource("Agua · Agua para solución / limpieza", "L", 5.0),
+        SeedResource("Agua · Agua para solución / limpieza", "L", 0.03),
         // 4. Autoclave / energía
-        SeedResource("Autoclave · Vapor de agua", "kg", 80.0),
-        SeedResource("Autoclave · Energía eléctrica", "kWh", 150.0),
-        SeedResource("Autoclave · Combustible para caldera", "L", 1_200.0),
-        SeedResource("Autoclave · Aceite / lubricante de maquinaria", "L", 8_500.0),
+        SeedResource("Autoclave · Vapor de agua", "kg", 0.80),
+        SeedResource("Autoclave · Energía eléctrica", "kWh", 0.95),
+        SeedResource("Autoclave · Combustible para caldera", "L", 4.50),
+        SeedResource("Autoclave · Aceite / lubricante de maquinaria", "L", 55.0),
         // 5. Preparación
-        SeedResource("Preparación · Sellador de extremos (parafina)", "kg", 2_200.0),
-        SeedResource("Preparación · Pintura asfáltica para extremos", "L", 3_800.0),
-        SeedResource("Preparación · Desinfectante / fungicida inicial", "L", 2_600.0),
-        SeedResource("Preparación · Adhesivo estructural", "kg", 5_400.0),
+        SeedResource("Preparación · Sellador de extremos (parafina)", "kg", 18.0),
+        SeedResource("Preparación · Pintura asfáltica para extremos", "L", 45.0),
+        SeedResource("Preparación · Desinfectante / fungicida inicial", "L", 38.0),
+        SeedResource("Preparación · Adhesivo estructural", "kg", 75.0),
         // 6. Herrajes y protección
-        SeedResource("Herraje · Placa metálica", "unidad", 1_800.0),
-        SeedResource("Herraje · Grapa metálica", "unidad", 250.0),
-        SeedResource("Herraje · Perno galvanizado", "unidad", 400.0),
-        SeedResource("Herraje · Clavo galvanizado", "kg", 3_200.0),
-        SeedResource("Herraje · Capuchón / tapa protectora", "unidad", 900.0),
-        SeedResource("Herraje · Recubrimiento impermeabilizante", "L", 3_600.0),
+        SeedResource("Herraje · Placa metálica", "unidad", 18.0),
+        SeedResource("Herraje · Grapa metálica", "unidad", 3.0),
+        SeedResource("Herraje · Perno galvanizado", "unidad", 6.0),
+        SeedResource("Herraje · Clavo galvanizado", "kg", 22.0),
+        SeedResource("Herraje · Capuchón / tapa protectora", "unidad", 12.0),
+        SeedResource("Herraje · Recubrimiento impermeabilizante", "L", 38.0),
         // 7. Acabados
-        SeedResource("Acabado · Pintura protectora base aceite", "L", 3_400.0),
-        SeedResource("Acabado · Barniz / recubrimiento UV", "L", 5_200.0),
+        SeedResource("Acabado · Pintura protectora base aceite", "L", 42.0),
+        SeedResource("Acabado · Barniz / recubrimiento UV", "L", 65.0),
         // 8. Auxiliares
-        SeedResource("Auxiliar · Solvente de limpieza", "L", 2_100.0),
-        SeedResource("Auxiliar · Kit de EPP (guantes, mascarilla, etc.)", "unidad", 18_000.0),
-        SeedResource("Auxiliar · Neutralizante ambiental / tratamiento de residuos", "kg", 2_900.0),
+        SeedResource("Auxiliar · Solvente de limpieza", "L", 28.0),
+        SeedResource("Auxiliar · Kit de EPP (guantes, mascarilla, etc.)", "unidad", 180.0),
+        SeedResource("Auxiliar · Neutralizante ambiental / tratamiento de residuos", "kg", 32.0),
     )
 
 /**
@@ -369,18 +369,18 @@ fun seedDemoInventoryDataIfEmpty() {
         )
         val lotSeeds = listOf(
             // EN_PROVEEDOR lots (awaiting transport)
-            LotSeed("Lote Madera 8m – Chapare #C-2026-041", "Distribución Primaria", 0, 0, 45.0, 25_000.0, 95_000.0, 38_000.0, PoleStorageLocation.EN_PROVEEDOR, 5, "Lote en predio Maderas Chapare, Cochabamba"),
-            LotSeed("Lote Madera 7m – Tunari #T-2026-038", "Distribución Domiciliaria", 2, 1, 30.0, 30_000.0, 85_000.0, 32_000.0, PoleStorageLocation.EN_PROVEEDOR, 3, "Lote en predio Forestal Tunari"),
-            LotSeed("Lote Madera 10m – Chapare #C-2026-043", "Distribución Secundaria", 1, 0, 40.0, 26_500.0, 105_000.0, 42_000.0, PoleStorageLocation.EN_PROVEEDOR, 2, "Madera 10m en Cochabamba"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-041", "Distribución Primaria", 0, 0, 45.0, 280.0, 850.0, 550.0, PoleStorageLocation.EN_PROVEEDOR, 5, "Lote en predio Maderas Chapare, Cochabamba"),
+            LotSeed("Lote Madera 7m – Tunari #T-2026-038", "Distribución Domiciliaria", 2, 1, 30.0, 340.0, 650.0, 420.0, PoleStorageLocation.EN_PROVEEDOR, 3, "Lote en predio Forestal Tunari"),
+            LotSeed("Lote Madera 10m – Chapare #C-2026-043", "Distribución Secundaria", 1, 0, 40.0, 300.0, 1_250.0, 850.0, PoleStorageLocation.EN_PROVEEDOR, 2, "Madera 10m en Cochabamba"),
             // EN_TRANSITO lots
-            LotSeed("Lote Madera 12m – Bosques del Oriente #BO-2026-029", "Transmisión", 3, 2, 20.0, 28_000.0, 140_000.0, 55_000.0, PoleStorageLocation.EN_TRANSITO, 10, "En tránsito desde Santa Cruz"),
-            LotSeed("Lote Madera 9m – Tunari #T-2026-035", "Alumbrado Público", 4, 1, 35.0, 30_000.0, 98_000.0, 37_000.0, PoleStorageLocation.EN_TRANSITO, 8, "En tránsito desde Cochabamba"),
+            LotSeed("Lote Madera 12m – Bosques del Oriente #BO-2026-029", "Transmisión", 3, 2, 20.0, 320.0, 1_850.0, 1_300.0, PoleStorageLocation.EN_TRANSITO, 10, "En tránsito desde Santa Cruz"),
+            LotSeed("Lote Madera 9m – Tunari #T-2026-035", "Alumbrado Público", 4, 1, 35.0, 340.0, 980.0, 650.0, PoleStorageLocation.EN_TRANSITO, 8, "En tránsito desde Cochabamba"),
             // FABRICA lots (raw, awaiting processing)
-            LotSeed("Lote Madera 8m – Chapare #C-2026-039", "Distribución Primaria", 0, 0, 50.0, 25_500.0, 95_000.0, 38_000.0, PoleStorageLocation.FABRICA, 25, "Llegó hace 25 días, pendiente de descortezado"),
-            LotSeed("Lote Madera 7m – El Valle #V-2026-033", "Distribución Domiciliaria", 2, 3, 25.0, 27_000.0, 85_000.0, 32_000.0, PoleStorageLocation.FABRICA, 20, "Troncos precortados por proveedor"),
-            LotSeed("Lote Madera 10m – Tunari #T-2026-036", "Distribución Secundaria", 1, 1, 35.0, 26_000.0, 105_000.0, 42_000.0, PoleStorageLocation.FABRICA, 18, "Madera 10m, listo para proceso"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-039", "Distribución Primaria", 0, 0, 50.0, 280.0, 850.0, 550.0, PoleStorageLocation.FABRICA, 25, "Llegó hace 25 días, pendiente de descortezado"),
+            LotSeed("Lote Madera 7m – El Valle #V-2026-033", "Distribución Domiciliaria", 2, 3, 25.0, 320.0, 650.0, 420.0, PoleStorageLocation.FABRICA, 20, "Troncos precortados por proveedor"),
+            LotSeed("Lote Madera 10m – Tunari #T-2026-036", "Distribución Secundaria", 1, 1, 35.0, 300.0, 1_250.0, 850.0, PoleStorageLocation.FABRICA, 18, "Madera 10m, listo para proceso"),
             // Failed lot at CRUDO
-            LotSeed("Lote Madera 8m – Chapare #C-2026-037 (Fallado)", "Distribución Primaria", 0, 0, 8.0, 25_000.0, 95_000.0, 30_000.0, PoleStorageLocation.FABRICA, 30, "Postes con defecto de curvatura detectado"),
+            LotSeed("Lote Madera 8m – Chapare #C-2026-037 (Fallado)", "Distribución Primaria", 0, 0, 8.0, 280.0, 850.0, 420.0, PoleStorageLocation.FABRICA, 30, "Postes con defecto de curvatura detectado"),
         )
 
         val productIds = mutableListOf<Int>()
@@ -420,8 +420,8 @@ fun seedDemoInventoryDataIfEmpty() {
         val run1Id = ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[0]
             it[ProviderTransportRunsTable.vehiclePlate] = "BB-LPV-12"
-            it[ProviderTransportRunsTable.freightCost] = 850_000.0
-            it[ProviderTransportRunsTable.gruaCost] = 120_000.0
+            it[ProviderTransportRunsTable.freightCost] = 8_500.0
+            it[ProviderTransportRunsTable.gruaCost] = 1_200.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run1Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run1Departed + 2L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = run1Arrived
@@ -439,14 +439,14 @@ fun seedDemoInventoryDataIfEmpty() {
         AcquisitionTransportCostsTable.insert {
             it[AcquisitionTransportCostsTable.productId] = productIds[5]
             it[AcquisitionTransportCostsTable.label] = "Flete (traslado #${run1Id})"
-            it[AcquisitionTransportCostsTable.lineCost] = 708_333.0
+            it[AcquisitionTransportCostsTable.lineCost] = 7_083.0
             it[AcquisitionTransportCostsTable.notes] = null
             it[AcquisitionTransportCostsTable.createdAtEpochMs] = run1Arrived
         }
         AcquisitionTransportCostsTable.insert {
             it[AcquisitionTransportCostsTable.productId] = productIds[5]
             it[AcquisitionTransportCostsTable.label] = "Grua (traslado #${run1Id})"
-            it[AcquisitionTransportCostsTable.lineCost] = 100_000.0
+            it[AcquisitionTransportCostsTable.lineCost] = 1_000.0
             it[AcquisitionTransportCostsTable.notes] = null
             it[AcquisitionTransportCostsTable.createdAtEpochMs] = run1Arrived
         }
@@ -457,8 +457,8 @@ fun seedDemoInventoryDataIfEmpty() {
         val run2Id = ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[1]
             it[ProviderTransportRunsTable.vehiclePlate] = "CC-MNS-34"
-            it[ProviderTransportRunsTable.freightCost] = 1_200_000.0
-            it[ProviderTransportRunsTable.gruaCost] = 180_000.0
+            it[ProviderTransportRunsTable.freightCost] = 12_000.0
+            it[ProviderTransportRunsTable.gruaCost] = 1_800.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run2Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run2Departed + 3L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = run2Arrived
@@ -476,10 +476,10 @@ fun seedDemoInventoryDataIfEmpty() {
         }
         // Transport costs split between lots 6 (25 qty) and 7 (35 qty), total qty=60
         // Lot 6 share: 25/60 = 41.67%
-        val lot6freight = 1_200_000.0 * 25.0 / 60.0
-        val lot6grua = 180_000.0 * 25.0 / 60.0
-        val lot7freight = 1_200_000.0 * 35.0 / 60.0
-        val lot7grua = 180_000.0 * 35.0 / 60.0
+        val lot6freight = 12_000.0 * 25.0 / 60.0
+        val lot6grua = 1_800.0 * 25.0 / 60.0
+        val lot7freight = 12_000.0 * 35.0 / 60.0
+        val lot7grua = 1_800.0 * 35.0 / 60.0
         AcquisitionTransportCostsTable.insert {
             it[AcquisitionTransportCostsTable.productId] = productIds[6]
             it[AcquisitionTransportCostsTable.label] = "Flete (traslado #${run2Id})"
@@ -514,8 +514,8 @@ fun seedDemoInventoryDataIfEmpty() {
         ProviderTransportRunsTable.insert {
             it[ProviderTransportRunsTable.driverId] = driverIds[2]
             it[ProviderTransportRunsTable.vehiclePlate] = "DD-SCZ-56"
-            it[ProviderTransportRunsTable.freightCost] = 950_000.0
-            it[ProviderTransportRunsTable.gruaCost] = 140_000.0
+            it[ProviderTransportRunsTable.freightCost] = 9_500.0
+            it[ProviderTransportRunsTable.gruaCost] = 1_400.0
             it[ProviderTransportRunsTable.departedAtEpochMs] = run3Departed
             it[ProviderTransportRunsTable.expectedArrivalEpochMs] = run3Departed + 3L * day
             it[ProviderTransportRunsTable.arrivedAtEpochMs] = null
@@ -975,11 +975,11 @@ fun seedDemoInventoryDataIfEmpty() {
         // === SALES ===
         // Sale 1: 10 poles TERMINADO → Distribuidora Eléctrica del Sur, 12 days ago
         val sale1At = now - 12L * day
-        val sale1UnitPrice = 95_000.0
+        val sale1UnitPrice = 850.0
         val sale1Qty = 10.0
         val sale1Total = sale1UnitPrice * sale1Qty
-        val materialPerPole1 = 25_500.0 + (808_333.0 / 50.0)
-        val transportPerPole1 = (708_333.0 + 100_000.0) / 50.0
+        val materialPerPole1 = 280.0 + (8_083.0 / 50.0)
+        val transportPerPole1 = (7_083.0 + 1_000.0) / 50.0
         // Process costs per pole for the terminado lot
         val tx1ProcTotal = tx1Resources.sumOf { (rid, amount, _) ->
             val cpu = ResourcesTable.selectAll().where { ResourcesTable.id eq rid }
@@ -1028,7 +1028,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Sale 2: 15 poles TERMINADO → Municipalidad de El Alto, 7 days ago
         val sale2At = now - 7L * day
-        val sale2UnitPrice = 98_000.0
+        val sale2UnitPrice = 850.0
         val sale2Qty = 15.0
         val sale2Total = sale2UnitPrice * sale2Qty
 
@@ -1060,7 +1060,7 @@ fun seedDemoInventoryDataIfEmpty() {
 
         // Sale 3: 2 poles failed (CRUDO) → Sodimac Regional, 5 days ago
         val sale3At = now - 5L * day
-        val sale3UnitPrice = 25_000.0
+        val sale3UnitPrice = 420.0
         val sale3Qty = 2.0
         val sale3Total = sale3UnitPrice * sale3Qty
 
@@ -1077,11 +1077,11 @@ fun seedDemoInventoryDataIfEmpty() {
             it[SalesTable.snapshotStage] = ProductStage.CRUDO.name
             it[SalesTable.snapshotWasFailed] = true
             it[SalesTable.snapshotProviderName] = "Maderas Chapare"
-            it[SalesTable.snapshotAcquisitionCostTotal] = sale3Qty * 25_000.0
-            it[SalesTable.snapshotAcquisitionMaterialTotal] = sale3Qty * 25_000.0
+            it[SalesTable.snapshotAcquisitionCostTotal] = sale3Qty * 280.0
+            it[SalesTable.snapshotAcquisitionMaterialTotal] = sale3Qty * 280.0
             it[SalesTable.snapshotAcquisitionTransportTotal] = 0.0
             it[SalesTable.snapshotProcessingCostTotal] = 0.0
-            it[SalesTable.snapshotUnitCostBasis] = 25_000.0
+            it[SalesTable.snapshotUnitCostBasis] = 280.0
             it[SalesTable.snapshotMarginPercent] = null
             it[SalesTable.snapshotSuggestedTotal] = null
         }

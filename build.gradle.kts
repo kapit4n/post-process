@@ -30,6 +30,8 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.21")
+    testImplementation(compose.desktop.uiTestJUnit4)
+    testImplementation("org.junit.vintage:junit-vintage-engine:5.10.2")
 }
 
 tasks.test {

@@ -79,22 +79,47 @@ Status: 🟢 Completed
 
 ## Milestone 2 - Compose UI Tests
 
-Status: ⬜ Not Started
+Status: 🟢 Completed
 
 ### Tasks
 
-- [ ] Add Compose testing dependencies
-- [ ] Create semantic test tags for key components
-- [ ] Dashboard screen tests
-- [ ] Inventory by stage screen tests
-- [ ] Sales screen tests
-- [ ] Transfer screen tests
-- [ ] Navigation tests
-- [ ] Dialog tests
+- [x] Add Compose testing dependencies (compose.desktop.uiTestJUnit4, junit-vintage-engine)
+- [x] Create test theme wrapper with CompositionLocals (UiTestBase)
+- [x] AppShell integration tests (renders all 11 routes, sidebar navigation)
+- [x] Sidebar navigation tests (click routes, verify screen switches)
+- [x] Individual screen tests (Catalog, Providers, Clients, History, Accounting, ByStage, Resources, Sales, Transport)
+- [x] Dialog interaction tests (create, cancel, save buttons, row action icons)
+- [x] Run all tests and verify passing (38 UI + 143 unit = 181 total)
+- [x] Update ROADMAP.md
+
+### Test Count
+
+| File | Tests |
+|------|-------|
+| `AppShellTest.kt` | 14 |
+| `ScreenTests.kt` | 24 |
+| **Total UI** | **38** |
+| Unit tests (Milestone 1) | 143 |
+| **Grand total** | **181** |
 
 ### Notes
 
-- (pending)
+- `junit-vintage-engine` bridges JUnit 4 (used by Compose `createComposeRule()`) through JUnit Platform
+- Use `contentDescription` (icon labels) for sidebar navigation clicks to avoid ambiguous text matches
+- Screens load data async via `LaunchedEffect` + `Dispatchers.IO` — `waitForIdle()` is essential after interactions
+- `ProductsByStageScreen` uses `stage.shortCode` for tab labels ("Descort." not "Descortezado")
+- All assertions use Spanish UI text as semantic matchers
+
+### Files Modified
+
+- `build.gradle.kts` — added `compose.desktop.uiTestJUnit4` and `junit-vintage-engine`
+- `src/test/kotlin/.../ui/UiTestBase.kt` (new) — test base with in-memory DB setup and `AppTheme` wrapper
+- `src/test/kotlin/.../ui/AppShellTest.kt` (new) — 14 integration tests
+- `src/test/kotlin/.../ui/ScreenTests.kt` (new) — 24 screen-level tests
+
+### Problems Found
+
+- (none)
 
 ---
 

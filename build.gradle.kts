@@ -27,6 +27,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
     implementation("org.apache.pdfbox:pdfbox:2.0.31")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.21")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 compose.desktop {

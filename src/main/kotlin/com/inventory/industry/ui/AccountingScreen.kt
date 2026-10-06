@@ -85,29 +85,29 @@ fun AccountingScreen(repo: InventoryRepository) {
                 SectionCard(title = "Costos", subtitle = "Inventario, proceso y traslados") {
                     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
                         Text(
-                            "Procesamiento acumulado (histórico): ${formatMoney(o.totalProcessingCostAllTime)}",
+                            "Procesamiento acumulado (histórico): ${formatMoneyBs(o.totalProcessingCostAllTime)}",
                             style = AppTypography.BodySmall,
                         )
                         Text(
-                            "Procesamiento imputado a stock abierto: ${formatMoney(o.processingCostAttributedToOpenStock)}",
+                            "Procesamiento imputado a stock abierto: ${formatMoneyBs(o.processingCostAttributedToOpenStock)}",
                             style = AppTypography.BodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "Adquisición en inventario: ${formatMoney(o.inventoryAcquisitionCostTotal)}",
+                            "Adquisición en inventario: ${formatMoneyBs(o.inventoryAcquisitionCostTotal)}",
                             style = AppTypography.BodySmall,
                         )
                         Text(
-                            "Traslado proveedor histórico: ${formatMoney(o.totalAcquisitionTransportAllTime)} " +
-                                "· en stock: ${formatMoney(o.acquisitionTransportAttributedToOpenStock)}",
+                            "Traslado proveedor histórico: ${formatMoneyBs(o.totalAcquisitionTransportAllTime)} " +
+                                "· en stock: ${formatMoneyBs(o.acquisitionTransportAttributedToOpenStock)}",
                             style = AppTypography.BodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         HorizontalDivider()
                         Text(
-                            "Ventas registradas — adquisición: ${formatMoney(o.soldAcquisitionCostTotal)} " +
-                                "(traslado ${formatMoney(o.soldAcquisitionTransportTotal)}) · proceso: " +
-                                formatMoney(o.soldProcessingCostTotal),
+                            "Ventas registradas — adquisición: ${formatMoneyBs(o.soldAcquisitionCostTotal)} " +
+                                "(traslado ${formatMoneyBs(o.soldAcquisitionTransportTotal)}) · proceso: " +
+                                formatMoneyBs(o.soldProcessingCostTotal),
                             style = AppTypography.BodySmall,
                         )
                     }
@@ -152,7 +152,7 @@ fun AccountingScreen(repo: InventoryRepository) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Total período", style = AppTypography.SectionTitle)
-                Text(formatMoney(sumMoney), style = AppTypography.SectionTitle, fontWeight = FontWeight.Bold)
+                Text(formatMoneyBs(sumMoney), style = AppTypography.SectionTitle, fontWeight = FontWeight.Bold)
             }
             Text(
                 "${formatQty(sumPoles)} postes · $sumTx operaciones",
@@ -178,7 +178,7 @@ fun AccountingScreen(repo: InventoryRepository) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            Text(formatMoney(b.totalAmount), style = AppTypography.Body, fontWeight = FontWeight.SemiBold)
+                            Text(formatMoneyBs(b.totalAmount), style = AppTypography.Body, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

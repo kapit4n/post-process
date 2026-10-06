@@ -1,11 +1,15 @@
 package com.inventory.industry.ui
 
+import java.math.RoundingMode
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.util.Locale
 
 private val DATE_TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 private val TIME_ONLY_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
@@ -34,9 +38,18 @@ fun parseDateTime(input: String): Long? {
 /** Muestra "120" como "120" y "1.25" como "1.25". */
 fun formatQty(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f".format(v)
 
-fun formatMoney(v: Double): String = "%.2f".format(v)
+private val MONEY_DECIMAL_FMT: DecimalFormat = DecimalFormat("#,##0.00").apply {
+    roundingMode = RoundingMode.HALF_UP
+    decimalFormatSymbols = DecimalFormatSymbols(Locale("es", "BO")).apply {
+        decimalSeparator = ','
+        groupingSeparator = '.'
+    }
+}
 
-/** Moneda local: "Bs 1,250.00" */
+/** Número con formato boliviano: "1.250,50". */
+fun formatMoney(v: Double): String = MONEY_DECIMAL_FMT.format(v)
+
+/** Moneda local en bolivianos: "Bs 1.250,50". */
 fun formatMoneyBs(v: Double): String = "Bs ${formatMoney(v)}"
 
 /**

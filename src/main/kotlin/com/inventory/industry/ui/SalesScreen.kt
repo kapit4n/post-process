@@ -503,7 +503,7 @@ fun SalesScreen(
                     }
                     Text("Cantidad: ${qtyParsed?.let { formatQty(it) } ?: "—"} postes", style = AppTypography.BodySmall)
                     Text(
-                        "Total cobrado: ${totalParsed?.let { formatMoney(it) } ?: "—"}",
+                        "Total cobrado: ${totalParsed?.let { formatMoneyBs(it) } ?: "—"}",
                         style = AppTypography.BodySmall,
                         fontWeight = FontWeight.Medium,
                     )

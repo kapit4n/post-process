@@ -828,10 +828,10 @@ Para un lote de 100 postes de 8 metros:
 
 | Concepto | Monto |
 |----------|-------|
-| Troncos (100 x Bs 350) | Bs 35,000 |
-| Transporte (flete + grua) | Bs 8,500 |
-| Procesamiento (recetas) | Bs 12,400 |
-| **Costo Total** | **Bs 55,900** |
+| Troncos (100 x Bs 350) | Bs 35.000 |
+| Transporte (flete + grua) | Bs 8.500 |
+| Procesamiento (recetas) | Bs 12.400 |
+| **Costo Total** | **Bs 55.900** |
 | **Costo por Poste** | **Bs 559** |
 | Precio de Venta (con 25% margen) | **Bs 699** |
 
@@ -1050,7 +1050,7 @@ graph LR
 **Situacion actual (estimada):**
 - 1 gerente de produccion dedicando 4 horas/semana a buscar datos
 - 1 administrador dedicando 6 horas/semana a generar reportes manuales
-- 2-3 errores de inventario al mes que cuestan Bs 2,000-5,000
+- 2-3 errores de inventario al mes que cuestan Bs 2.000-5.000
 
 **Con el ERP:**
 - Datos disponibles en tiempo real (0 horas buscando)
@@ -1156,8 +1156,8 @@ graph TD
 **7:01 AM** — Ve el Dashboard:
 - **350 postes** en inventario total
 - **120 postes** disponibles para venta
-- **Bs 85,000** valor del inventario
-- **Bs 12,400** ventas este mes
+- **Bs 85.000** valor del inventario
+- **Bs 12.400** ventas este mes
 - **22%** margen promedio
 
 **7:02 AM** — Identifica que hay muchos postes en "Crudo" y pocos en "Terminado".
@@ -1166,7 +1166,7 @@ graph TD
 
 **7:05 AM** — Revisa la actividad reciente:
 - Ayer se completaron 80 transformaciones
-- Se registro una venta de Bs 45,000
+- Se registro una venta de Bs 45.000
 - Hay un traslado en progreso
 
 **Decisiones Tomadas:**

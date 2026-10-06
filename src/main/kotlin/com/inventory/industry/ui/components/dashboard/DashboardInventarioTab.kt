@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.InventoryFlowSummary
 import com.inventory.industry.ui.components.cards.SectionCard
-import com.inventory.industry.ui.formatMoney
+import com.inventory.industry.ui.formatMoneyBs
 import com.inventory.industry.ui.formatQty
 import com.inventory.industry.ui.theme.AppSpacing
 import com.inventory.industry.ui.theme.AppTypography
@@ -44,7 +44,7 @@ fun DashboardInventarioTab(
                     subtitle = "Costo adquisición estimado",
                 ) {
                     Text(
-                        formatMoney(inventoryValue),
+                        formatMoneyBs(inventoryValue),
                         style = AppTypography.MetricMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -55,7 +55,7 @@ fun DashboardInventarioTab(
                     subtitle = "Insumos acumulados",
                 ) {
                     Text(
-                        formatMoney(totalTransformCost),
+                        formatMoneyBs(totalTransformCost),
                         style = AppTypography.MetricMedium,
                         fontWeight = FontWeight.Bold,
                     )

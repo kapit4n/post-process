@@ -1,10 +1,25 @@
 package com.inventory.industry.reports
 
+import java.math.RoundingMode
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.font.PDType1Font
 
 internal object PdfReportUtils {
     fun fmtQty(v: Double): String = if (v % 1.0 == 0.0) v.toInt().toString() else "%.2f".format(v)
+
+    private val MONEY_DECIMAL_FMT: DecimalFormat = DecimalFormat("#,##0.00").apply {
+        roundingMode = RoundingMode.HALF_UP
+        decimalFormatSymbols = DecimalFormatSymbols(Locale("es", "BO")).apply {
+            decimalSeparator = ','
+            groupingSeparator = '.'
+        }
+    }
+
+    /** Formato monetario boliviano: "Bs 1.250,50". */
+    fun fmtMoney(v: Double): String = "Bs ${MONEY_DECIMAL_FMT.format(v)}"
 
     fun writeLine(
         cs: PDPageContentStream,

@@ -3,6 +3,17 @@ package com.inventory.industry.data
 import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 
+/**
+ * Pares clave/valor internos de la aplicación (versión del seed, banderas, etc.).
+ * Se usa para detectar instalaciones con datos de demostración antiguos y forzar
+ * una recarga limpia del conjunto de datos realista.
+ */
+object AppMetaTable : Table("app_meta") {
+    val key = varchar("key", 64)
+    val value = text("value")
+    override val primaryKey = PrimaryKey(key)
+}
+
 /** Catálogo maestro de tipos de poste que se pueden ingresar como lote crudo. */
 object CatalogProductsTable : Table("catalog_products") {
     val id = integer("id").autoIncrement()

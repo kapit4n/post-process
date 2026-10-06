@@ -151,7 +151,7 @@ fun DashboardScreen(
                 listos = formatQty(f.polesReadyStandardSale),
                 fallados = formatQty(f.polesFailedSalvage),
                 lotes = productCount!!.toString(),
-                valorInventario = formatMoney(inventoryValue!!),
+                valorInventario = formatMoneyBs(inventoryValue!!),
                 enProcesoBrush =
                     Brush.horizontalGradient(
                         listOf(

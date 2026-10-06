@@ -63,9 +63,9 @@ object SalesDetailPdfGenerator {
             y = PdfReportUtils.sectionTitle(cs, LEFT, y, "Resumen")
             y = PdfReportUtils.writeLine(cs, LEFT, y, "Ventas registradas: ${report.saleCount}", size = 11f)
             y = PdfReportUtils.writeLine(cs, LEFT, y, "Postes vendidos: ${PdfReportUtils.fmtQty(report.totalPoles)}", size = 11f)
-            y = PdfReportUtils.writeLine(cs, LEFT, y, "Total facturado: Bs ${PdfReportUtils.fmtQty(report.totalBilled)}", size = 11f)
-            y = PdfReportUtils.writeLine(cs, LEFT, y, "Costo imputado: Bs ${PdfReportUtils.fmtQty(report.totalCost)}", size = 11f)
-            y = PdfReportUtils.writeLine(cs, LEFT, y, "Utilidad estimada: Bs ${PdfReportUtils.fmtQty(report.totalProfit)}", size = 11f)
+            y = PdfReportUtils.writeLine(cs, LEFT, y, "Total facturado: ${PdfReportUtils.fmtMoney(report.totalBilled)}", size = 11f)
+            y = PdfReportUtils.writeLine(cs, LEFT, y, "Costo imputado: ${PdfReportUtils.fmtMoney(report.totalCost)}", size = 11f)
+            y = PdfReportUtils.writeLine(cs, LEFT, y, "Utilidad estimada: ${PdfReportUtils.fmtMoney(report.totalProfit)}", size = 11f)
             y =
                 PdfReportUtils.writeLine(
                     cs,
@@ -135,8 +135,8 @@ object SalesDetailPdfGenerator {
                 PdfReportUtils.pdfSafe(sale.clientName.take(18)),
                 product.take(28),
                 PdfReportUtils.fmtQty(sale.quantitySold),
-                PdfReportUtils.fmtQty(sale.totalAmount),
-                PdfReportUtils.fmtQty(sale.estimatedProfit()),
+                PdfReportUtils.fmtMoney(sale.totalAmount),
+                PdfReportUtils.fmtMoney(sale.estimatedProfit()),
             )
         cells.forEachIndexed { i, cell ->
             PdfReportUtils.writeTextAt(cs, cols[i], rowY, cell, size = 8f)
@@ -147,7 +147,7 @@ object SalesDetailPdfGenerator {
             cols[2],
             detailY,
             PdfReportUtils.pdfSafe(
-                "${sale.statusLabelForReport()} · Costo Bs ${PdfReportUtils.fmtQty(sale.estimatedTotalCost())}" +
+                "${sale.statusLabelForReport()} · Costo ${PdfReportUtils.fmtMoney(sale.estimatedTotalCost())}" +
                     (sale.notes?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
             ),
             size = 7f,

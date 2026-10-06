@@ -79,9 +79,9 @@ Se implementó una función de carga de datos semilla realistas (`seedDemoInvent
 
 | # | Cliente | Producto | Cantidad | Monto | Días atrás |
 |---|---------|----------|----------|-------|------------|
-| 1 | Empresa Eléctrica Cochabamba | Madera 8m Terminado | 10 | Bs 950,000 | 12 |
-| 2 | Municipalidad de El Alto | Madera 8m Terminado | 15 | Bs 1,470,000 | 7 |
-| 3 | Servicios Eléctricos Bolivia | Madera 8m Fallado (CRUDO) | 2 | Bs 50,000 | 5 |
+| 1 | Empresa Eléctrica Cochabamba | Madera 8m Terminado | 10 | Bs 950.000 | 12 |
+| 2 | Municipalidad de El Alto | Madera 8m Terminado | 15 | Bs 1.470.000 | 7 |
+| 3 | Servicios Eléctricos Bolivia | Madera 8m Fallado (CRUDO) | 2 | Bs 50.000 | 5 |
 
 ### Costos de Procesamiento
 
@@ -92,8 +92,8 @@ Se registraron líneas de costo para cada transformación:
 
 ### Costos de Traslado
 
-- **Run 1**: Flete Bs 708,333 + Grua Bs 100,000 → Prorrateado al lote madera 8m
-- **Run 2**: Flete Bs 1,200,000 + Grua Bs 180,000 → Prorrateado entre madera 7m y madera 10m
+- **Run 1**: Flete Bs 708.333 + Grua Bs 100.000 → Prorrateado al lote madera 8m
+- **Run 2**: Flete Bs 1.200.000 + Grua Bs 180.000 → Prorrateado entre madera 7m y madera 10m
 
 ## Impacto en la Aplicación
 

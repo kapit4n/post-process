@@ -155,7 +155,7 @@ private fun TransformationCard(t: Transformation) {
                 )
                 Metric(
                     "Costo insumos",
-                    if (inProgress) "—" else formatMoney(t.totalCost),
+                    if (inProgress) "—" else formatMoneyBs(t.totalCost),
                 )
             }
             HorizontalDivider()

@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.inventory.industry.data.SaleRecord
 import com.inventory.industry.domain.ProductStage
 import com.inventory.industry.ui.formatEpochMs
-import com.inventory.industry.ui.formatMoney
+import com.inventory.industry.ui.formatMoneyBs
 import com.inventory.industry.ui.formatQty
 import com.inventory.industry.ui.components.cards.AppCard
 import com.inventory.industry.ui.components.feedback.StatusChip
@@ -180,10 +180,10 @@ fun SaleHistoryCard(
             ) {
                 val costParts =
                     buildString {
-                        append(formatMoney(sale.snapshotAcquisitionCostTotal))
+                        append(formatMoneyBs(sale.snapshotAcquisitionCostTotal))
                         if (sale.snapshotProcessingCostTotal > 1e-9) {
                             append(" · proc. ")
-                            append(formatMoney(sale.snapshotProcessingCostTotal))
+                            append(formatMoneyBs(sale.snapshotProcessingCostTotal))
                         }
                     }
                 SaleMetricColumn(
@@ -197,7 +197,7 @@ fun SaleHistoryCard(
                 if (sug != null) {
                     SaleMetricColumn(
                         label = "Sugerido al vender",
-                        value = formatMoney(sug),
+                        value = formatMoneyBs(sug),
                         modifier = Modifier.weight(1f),
                         valueColor = AppThemeState.semantic.info,
                         horizontalAlignment = Alignment.End,

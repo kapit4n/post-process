@@ -370,8 +370,8 @@ graph LR
 
 | Elemento | Valor |
 |----------|-------|
-| Moneda | Bolivianos (Bs) |
-| Formato | `formatMoneyBs()` → `Bs 1,250.00` |
+| Moneda | Bolivianos (Bs) — código ISO BOB |
+| Formato | `formatMoneyBs()` → `Bs 1.250,50` |
 | Teléfonos | +591 7x... (móvil), +591 4/3... (fijo) |
 | Ciudades | Cochabamba, Santa Cruz, El Alto, Tarija |
 | Patentes | Formato boliviano (BB-LPV-12) |

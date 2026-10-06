@@ -283,7 +283,7 @@ private fun ResourceStockInventoryTab(
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
-            "Valor estimado del inventario registrado: ${formatMoney(stockValueEstimate)}",
+            "Valor estimado del inventario registrado: ${formatMoneyBs(stockValueEstimate)}",
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -315,7 +315,7 @@ private fun ResourceStockInventoryTab(
                         "${formatQty(lot.quantity)} ${lot.resourceUnit}",
                         modifier = Modifier.weight(0.55f),
                     )
-                    Text(formatMoney(lot.acquisitionPricePerUnit), modifier = Modifier.weight(0.65f))
+                    Text(formatMoneyBs(lot.acquisitionPricePerUnit), modifier = Modifier.weight(0.65f))
                     Text(formatIsoDateOrDash(lot.expirationDate), modifier = Modifier.weight(0.65f))
                     Row(
                         modifier = Modifier.weight(0.5f),

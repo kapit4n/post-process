@@ -472,7 +472,7 @@ fun ProviderTransportScreen(repo: InventoryRepository) {
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
                     Text(
                         "Confirme fecha y hora de recepción en instalaciones. Se imputará flete " +
-                            "(${formatMoney(run.freightCost)}) y grúa (${formatMoney(run.gruaCost)}) prorrateado " +
+                            "(${formatMoneyBs(run.freightCost)}) y grúa (${formatMoneyBs(run.gruaCost)}) prorrateado " +
                             "entre los lotes del envío y quedará incorporado al costo de adquisición de cada lote. " +
                             "Los lotes pasan a ubicación Fábrica.",
                         style = AppTypography.BodySmall,

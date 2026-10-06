@@ -691,7 +691,7 @@ private fun postesInventoryExportCsv(products: List<Product>): String =
                         csvField(p.providerName.orEmpty()),
                         csvField(p.acquisitionStorageLocation.shortLabel),
                         csvField(formatQty(p.quantity)),
-                        csvField(p.effectiveSalePrice()?.let { formatMoney(it) }.orEmpty()),
+                        csvField(p.effectiveSalePrice()?.let { formatMoneyBs(it) }.orEmpty()),
                         csvField(p.statusLabel()),
                         csvField(p.notes.orEmpty()),
                     )
@@ -1049,7 +1049,7 @@ private fun EnterpriseInventoryTableRow(
             )
             EnterpriseTableDataCell(formatQty(product.quantity), 0.35f)
             EnterpriseTableDataCell(
-                text = product.effectiveSalePrice()?.let { formatMoney(it) } ?: "—",
+                text = product.effectiveSalePrice()?.let { formatMoneyBs(it) } ?: "—",
                 weight = 0.5f,
             )
             Box(Modifier.weight(0.65f), contentAlignment = Alignment.CenterStart) {
@@ -1409,8 +1409,8 @@ private fun ProductEditorDialog(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            "Traslado ya imputado a este lote en el sistema: ${formatMoney(persistedTransportTotal)} " +
-                                "(≈ ${formatMoney(trPerPole)} por poste con la cantidad indicada arriba). " +
+                            "Traslado ya imputado a este lote en el sistema: ${formatMoneyBs(persistedTransportTotal)} " +
+                                "(≈ ${formatMoneyBs(trPerPole)} por poste con la cantidad indicada arriba). " +
                                 "Esto incluye líneas guardadas en predio y, si correspondió, la parte de flete y grúa de viajes cerrados. " +
                                 "Costo puesto en planta por poste ≈ pago proveedor (arriba) + traslado por poste.",
                             modifier = Modifier.padding(10.dp),
